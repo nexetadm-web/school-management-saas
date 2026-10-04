@@ -6,7 +6,7 @@ Built with **Next.js 15, Tailwind CSS & Supabase.**
 
 ### 📸 Dashboard Preview
 
-![Dashboard Overview](screenshots/dashboard.png)
+![Dashboard Overview](dashboard.png)
 
 > Dashboard Overview - Multi-Tenant Fee Management Portal with Real-time Analytics
 
