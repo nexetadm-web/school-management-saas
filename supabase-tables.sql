@@ -62,17 +62,35 @@ CREATE TABLE IF NOT EXISTS expenses (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Add school_id to existing tables if upgrading database
+-- Ensure school_id column exists on all tables
 ALTER TABLE students ADD COLUMN IF NOT EXISTS school_id BIGINT REFERENCES schools(id) ON DELETE CASCADE;
 ALTER TABLE fee_records ADD COLUMN IF NOT EXISTS school_id BIGINT REFERENCES schools(id) ON DELETE CASCADE;
 ALTER TABLE teachers ADD COLUMN IF NOT EXISTS school_id BIGINT REFERENCES schools(id) ON DELETE CASCADE;
 ALTER TABLE salary_records ADD COLUMN IF NOT EXISTS school_id BIGINT REFERENCES schools(id) ON DELETE CASCADE;
 ALTER TABLE expenses ADD COLUMN IF NOT EXISTS school_id BIGINT REFERENCES schools(id) ON DELETE CASCADE;
 
--- Disable Row Level Security (RLS) for testing
-ALTER TABLE schools DISABLE ROW LEVEL SECURITY;
-ALTER TABLE students DISABLE ROW LEVEL SECURITY;
-ALTER TABLE fee_records DISABLE ROW LEVEL SECURITY;
-ALTER TABLE teachers DISABLE ROW LEVEL SECURITY;
-ALTER TABLE salary_records DISABLE ROW LEVEL SECURITY;
-ALTER TABLE expenses DISABLE ROW LEVEL SECURITY;
+-- Enable Row Level Security (RLS) and set policy FOR ALL USING (true) WITH CHECK (true)
+ALTER TABLE schools ENABLE ROW LEVEL SECURITY;
+ALTER TABLE students ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fee_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE teachers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE salary_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow all for schools" ON schools;
+CREATE POLICY "Allow all for schools" ON schools FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for students" ON students;
+CREATE POLICY "Allow all for students" ON students FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for fee_records" ON fee_records;
+CREATE POLICY "Allow all for fee_records" ON fee_records FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for teachers" ON teachers;
+CREATE POLICY "Allow all for teachers" ON teachers FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for salary_records" ON salary_records;
+CREATE POLICY "Allow all for salary_records" ON salary_records FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for expenses" ON expenses;
+CREATE POLICY "Allow all for expenses" ON expenses FOR ALL USING (true) WITH CHECK (true);

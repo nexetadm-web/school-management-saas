@@ -382,7 +382,7 @@ export default function SuperAdminPage() {
                 Total Revenue
               </p>
               <h3 className="text-3xl font-extrabold text-emerald-700 mt-1">
-                ${totalRevenueAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                Rs. {totalRevenueAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </h3>
               <p className="text-[11px] text-emerald-600 font-medium mt-1">Collected fee dues</p>
             </div>
@@ -597,7 +597,7 @@ export default function SuperAdminPage() {
               <div className="p-3 bg-white border border-gray-200 rounded-xl">
                 <p className="text-[11px] font-bold text-gray-400 uppercase">Fees Collected</p>
                 <p className="text-xl font-black text-emerald-700 mt-0.5">
-                  ${selectedSchool.totalFeesCollected?.toLocaleString()}
+                  Rs. {selectedSchool.totalFeesCollected?.toLocaleString()}
                 </p>
               </div>
               <div className="p-3 bg-white border border-gray-200 rounded-xl">
