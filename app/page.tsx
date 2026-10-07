@@ -40,7 +40,9 @@ import {
   Bell,
   Globe,
   Building,
+  FileText,
 } from "lucide-react";
+import { jsPDF } from "jspdf";
 import {
   ResponsiveContainer,
   BarChart,
@@ -164,8 +166,10 @@ export default function Home() {
   const [feeMonthFilter, setFeeMonthFilter] = useState<string>("all");
 
   // Dates
-  const currentMonth = new Date().toISOString().slice(0, 7);
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const currentYear = now.getFullYear().toString();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
   // Forms State
   const [studentForm, setStudentForm] = useState({
@@ -345,112 +349,140 @@ export default function Home() {
     return set.size;
   }, [students]);
 
+  // Date match helpers for Realtime Calculations
+  const isMatchingYear = (dateOrMonth?: string | null, createdAt?: string | null) => {
+    if (dateOrMonth && dateOrMonth.slice(0, 4) === currentYear) return true;
+    if (createdAt) {
+      if (createdAt.slice(0, 4) === currentYear) return true;
+      try {
+        const d = new Date(createdAt);
+        if (d.getFullYear().toString() === currentYear) return true;
+      } catch {}
+    }
+    return false;
+  };
+
+  const isMatchingMonth = (dateOrMonth?: string | null, createdAt?: string | null) => {
+    if (dateOrMonth && dateOrMonth.slice(0, 7) === currentMonth) return true;
+    if (createdAt) {
+      if (createdAt.slice(0, 7) === currentMonth) return true;
+      try {
+        const d = new Date(createdAt);
+        const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        if (m === currentMonth) return true;
+      } catch {}
+    }
+    return false;
+  };
+
+  const isMatchingToday = (dateStr?: string | null, createdAt?: string | null) => {
+    if (dateStr) {
+      if (dateStr.slice(0, 10) === todayStr) return true;
+      try {
+        const d = new Date(dateStr);
+        const t = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        if (t === todayStr) return true;
+      } catch {}
+    }
+    if (createdAt) {
+      if (createdAt.slice(0, 10) === todayStr) return true;
+      try {
+        const d = new Date(createdAt);
+        const t = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        if (t === todayStr) return true;
+      } catch {}
+    }
+    return false;
+  };
+
+  // Unpaid Fees: Realtime Count & Due Amount
   const pendingFeeCount = useMemo(() => {
     return feeRecords.filter((f) => f.status.toLowerCase() !== "paid").length;
   }, [feeRecords]);
 
-  const totalFeesCollectedThisMonth = useMemo(() => {
+  const unpaidFeeDue = useMemo(() => {
     return feeRecords
-      .filter(
-        (f) =>
-          f.status.toLowerCase() === "paid" &&
-          (f.month === currentMonth || (f.created_at && f.created_at.slice(0, 7) === currentMonth))
-      )
-      .reduce((sum, f) => sum + Number(f.amount || 0), 0);
-  }, [feeRecords, currentMonth]);
-
-  const totalFeesCollectedAllTime = useMemo(() => {
-    return feeRecords
-      .filter((f) => f.status.toLowerCase() === "paid")
+      .filter((f) => f.status.toLowerCase() !== "paid")
       .reduce((sum, f) => sum + Number(f.amount || 0), 0);
   }, [feeRecords]);
 
+  // Realtime Income Calculations (Sum of Paid Fees + Accounting Income filtered by date)
+  const totalIncomeThisYear = useMemo(() => {
+    const feesYear = feeRecords
+      .filter((f) => f.status.toLowerCase() === "paid" && isMatchingYear(f.month, f.created_at))
+      .reduce((sum, f) => sum + Number(f.amount || 0), 0);
+    const extraIncomeYear = expenses
+      .filter((e) => e.type === "income" && isMatchingYear(e.date, e.created_at))
+      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    return feesYear + extraIncomeYear;
+  }, [feeRecords, expenses, currentYear]);
+
+  const totalIncomeThisMonth = useMemo(() => {
+    const feesMonth = feeRecords
+      .filter((f) => f.status.toLowerCase() === "paid" && isMatchingMonth(f.month, f.created_at))
+      .reduce((sum, f) => sum + Number(f.amount || 0), 0);
+    const extraIncomeMonth = expenses
+      .filter((e) => e.type === "income" && isMatchingMonth(e.date, e.created_at))
+      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    return feesMonth + extraIncomeMonth;
+  }, [feeRecords, expenses, currentMonth]);
+
   const incomeToday = useMemo(() => {
     const feesToday = feeRecords
-      .filter(
-        (f) =>
-          f.status.toLowerCase() === "paid" &&
-          f.created_at &&
-          f.created_at.slice(0, 10) === todayStr
-      )
+      .filter((f) => f.status.toLowerCase() === "paid" && isMatchingToday(null, f.created_at))
       .reduce((sum, f) => sum + Number(f.amount || 0), 0);
-
     const extraIncomeToday = expenses
-      .filter(
-        (e) =>
-          e.type === "income" &&
-          ((e.date && e.date === todayStr) || (e.created_at && e.created_at.slice(0, 10) === todayStr))
-      )
+      .filter((e) => e.type === "income" && isMatchingToday(e.date, e.created_at))
       .reduce((sum, e) => sum + Number(e.amount || 0), 0);
-
     return feesToday + extraIncomeToday;
   }, [feeRecords, expenses, todayStr]);
 
-  const totalSalaryPaidThisMonth = useMemo(() => {
-    return salaryRecords
-      .filter(
-        (s) =>
-          s.status.toLowerCase() === "paid" &&
-          (s.month === currentMonth || (s.created_at && s.created_at.slice(0, 7) === currentMonth))
-      )
+  // Realtime Expense Calculations (Sum of Paid Salaries + Expenses filtered by date)
+  const totalExpenseThisYear = useMemo(() => {
+    const salaryYear = salaryRecords
+      .filter((s) => s.status.toLowerCase() === "paid" && isMatchingYear(s.month, s.created_at))
       .reduce((sum, s) => sum + Number(s.amount || 0), 0);
-  }, [salaryRecords, currentMonth]);
+    const expensesYear = expenses
+      .filter((e) => e.type === "expense" && isMatchingYear(e.date, e.created_at))
+      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    return salaryYear + expensesYear;
+  }, [salaryRecords, expenses, currentYear]);
 
-  const totalSalaryPaidAllTime = useMemo(() => {
-    return salaryRecords
-      .filter((s) => s.status.toLowerCase() === "paid")
+  const totalExpenseThisMonth = useMemo(() => {
+    const salaryMonth = salaryRecords
+      .filter((s) => s.status.toLowerCase() === "paid" && isMatchingMonth(s.month, s.created_at))
       .reduce((sum, s) => sum + Number(s.amount || 0), 0);
-  }, [salaryRecords]);
-
-  const totalOtherExpensesThisMonth = useMemo(() => {
-    return expenses
-      .filter(
-        (e) =>
-          e.type === "expense" &&
-          ((e.date && e.date.slice(0, 7) === currentMonth) || (e.created_at && e.created_at.slice(0, 7) === currentMonth))
-      )
+    const expensesMonth = expenses
+      .filter((e) => e.type === "expense" && isMatchingMonth(e.date, e.created_at))
       .reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  }, [expenses, currentMonth]);
+    return salaryMonth + expensesMonth;
+  }, [salaryRecords, expenses, currentMonth]);
 
-  const totalOtherExpensesAllTime = useMemo(() => {
-    return expenses
-      .filter((e) => e.type === "expense")
+  const expenseToday = useMemo(() => {
+    const salaryToday = salaryRecords
+      .filter((s) => s.status.toLowerCase() === "paid" && isMatchingToday(null, s.created_at))
+      .reduce((sum, s) => sum + Number(s.amount || 0), 0);
+    const expensesToday = expenses
+      .filter((e) => e.type === "expense" && isMatchingToday(e.date, e.created_at))
       .reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  }, [expenses]);
+    return salaryToday + expensesToday;
+  }, [salaryRecords, expenses, todayStr]);
+
+  // Realtime Profit Calculations (100% dynamic, auto-updates on any fee/salary/expense change)
+  const netProfitThisMonth = totalIncomeThisMonth - totalExpenseThisMonth;
+  const netProfitThisYear = totalIncomeThisYear - totalExpenseThisYear;
 
   const totalExtraIncomeThisMonth = useMemo(() => {
     return expenses
-      .filter(
-        (e) =>
-          e.type === "income" &&
-          ((e.date && e.date.slice(0, 7) === currentMonth) || (e.created_at && e.created_at.slice(0, 7) === currentMonth))
-      )
+      .filter((e) => e.type === "income" && isMatchingMonth(e.date, e.created_at))
       .reduce((sum, e) => sum + Number(e.amount || 0), 0);
   }, [expenses, currentMonth]);
 
-  const totalExtraIncomeAllTime = useMemo(() => {
+  const totalOtherExpensesThisMonth = useMemo(() => {
     return expenses
-      .filter((e) => e.type === "income")
+      .filter((e) => e.type === "expense" && isMatchingMonth(e.date, e.created_at))
       .reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  }, [expenses]);
-
-  const expenseToday = useMemo(() => {
-    return expenses
-      .filter(
-        (e) =>
-          e.type === "expense" &&
-          ((e.date && e.date === todayStr) || (e.created_at && e.created_at.slice(0, 10) === todayStr))
-      )
-      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  }, [expenses, todayStr]);
-
-  const totalIncomeAllTime = totalFeesCollectedAllTime + totalExtraIncomeAllTime;
-  const totalExpenseAllTime = totalSalaryPaidAllTime + totalOtherExpensesAllTime;
-
-  const totalIncomeThisMonth = totalFeesCollectedThisMonth + totalExtraIncomeThisMonth;
-  const totalExpenseThisMonth = totalSalaryPaidThisMonth + totalOtherExpensesThisMonth;
-
-  const netProfitThisMonth = totalIncomeThisMonth - totalExpenseThisMonth;
+  }, [expenses, currentMonth]);
 
   // Recharts Monthly Paid vs Unpaid Fee Report Data (REAL DATA ONLY)
   const monthlyFeeReportData = useMemo(() => {
@@ -678,6 +710,216 @@ export default function Home() {
       showNotification("error", err.message || "Failed to delete fee record.");
       fetchAllData();
     }
+  };
+
+  // Generate Professional PDF Receipt with OA branding
+  const generateFeeReceipt = (fee: FeeRecord) => {
+    try {
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a5",
+      });
+
+      const effectiveStudent = students.find((s) => s.id === fee.student_id);
+      const studentName = effectiveStudent?.name || getStudentName(fee);
+      const studentClass = effectiveStudent?.class || getStudentClass(fee) || "N/A";
+      const fatherName = effectiveStudent?.father_name || "N/A";
+      const isPaid = fee.status.toLowerCase() === "paid";
+      const amountNum = Number(fee.amount || 0);
+      const currentSchoolName = schoolName || "OA SMART SCHOOL";
+      const receiptDate = fee.created_at
+        ? new Date(fee.created_at).toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+          })
+        : new Date().toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+          });
+      const paymentRef = `REC-${fee.school_id || "OA"}-${fee.id.toString().padStart(6, "0")}`;
+
+      // Outer Border Frame
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.8);
+      doc.roundedRect(8, 8, 132, 194, 4, 4, "S");
+
+      // Inner Header Background
+      doc.setFillColor(240, 244, 248);
+      doc.roundedRect(10, 10, 128, 36, 3, 3, "F");
+
+      // OA Logo Circular Badge (OA Brand Blue & Yellow)
+      doc.setFillColor(30, 58, 95); // #1e3a5f
+      doc.roundedRect(15, 15, 20, 20, 3, 3, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(241, 196, 15); // #f1c40f
+      doc.text("OA", 25, 27.5, { align: "center" });
+
+      // School Name & Subtitles
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(30, 58, 95);
+      doc.text(currentSchoolName, 39, 22);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text("Official Fee Collection Voucher & Receipt", 39, 28);
+      doc.text(`Reference: ${paymentRef}`, 39, 33);
+
+      // Divider Line
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.5);
+      doc.line(12, 50, 136, 50);
+
+      // Receipt Meta Bar
+      doc.setFillColor(241, 245, 249);
+      doc.rect(12, 54, 124, 12, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(71, 85, 105);
+      doc.text("RECEIPT NO:", 16, 61.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`#${fee.id}`, 38, 61.5);
+
+      doc.setTextColor(71, 85, 105);
+      doc.text("DATE:", 80, 61.5);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(15, 23, 42);
+      doc.text(receiptDate, 93, 61.5);
+
+      // Student Profile Table Grid
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(30, 41, 59);
+      doc.text("Student & Billing Details", 14, 76);
+
+      const startY = 82;
+      const rowH = 9;
+
+      const details = [
+        { label: "Student Name", value: studentName },
+        { label: "Class / Grade", value: studentClass },
+        { label: "Father Name", value: fatherName },
+        { label: "Student ID", value: `#${fee.student_id}` },
+        { label: "Billing Month", value: fee.month },
+        { label: "Payment Status", value: isPaid ? "PAID" : "PENDING" },
+      ];
+
+      details.forEach((item, idx) => {
+        const curY = startY + idx * rowH;
+        if (idx % 2 === 0) {
+          doc.setFillColor(248, 250, 252);
+          doc.rect(12, curY - 6, 124, rowH, "F");
+        }
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(item.label, 16, curY);
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.setTextColor(15, 23, 42);
+        doc.text(item.value, 70, curY);
+      });
+
+      // Amount Breakdown Box
+      const feeBoxY = 142;
+      doc.setFillColor(236, 253, 245);
+      doc.setDrawColor(167, 243, 208);
+      doc.roundedRect(12, feeBoxY, 124, 26, 3, 3, "FD");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(6, 95, 70);
+      doc.text("TOTAL FEE AMOUNT", 18, feeBoxY + 9);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.setTextColor(4, 120, 87);
+      doc.text(`Rs. ${amountNum.toLocaleString("en-US", { minimumFractionDigits: 2 })}`, 18, feeBoxY + 20);
+
+      // PAID / UNPAID STAMP
+      if (isPaid) {
+        doc.setDrawColor(16, 185, 129);
+        doc.setLineWidth(1.2);
+        doc.roundedRect(92, feeBoxY + 4, 38, 17, 2, 2, "S");
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.setTextColor(5, 150, 105);
+        doc.text("PAID", 111, feeBoxY + 13, { align: "center" });
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6);
+        doc.setTextColor(16, 185, 129);
+        doc.text("VERIFIED BY OA ACCOUNTS", 111, feeBoxY + 18, { align: "center" });
+      } else {
+        doc.setDrawColor(239, 68, 68);
+        doc.setLineWidth(1.2);
+        doc.roundedRect(92, feeBoxY + 4, 38, 17, 2, 2, "S");
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.setTextColor(220, 38, 38);
+        doc.text("UNPAID", 111, feeBoxY + 14, { align: "center" });
+      }
+
+      // Footer Notes & Signatures
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(148, 163, 184);
+      doc.text("Computer-generated payment voucher. OA Smart School Fee System.", 14, 178);
+
+      doc.setDrawColor(203, 213, 225);
+      doc.setLineWidth(0.4);
+      doc.line(16, 192, 54, 192);
+      doc.line(94, 192, 132, 192);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      doc.text("Depositor / Student", 35, 196, { align: "center" });
+      doc.text("Authorized Signature", 113, 196, { align: "center" });
+
+      const safeStudent = studentName.toLowerCase().replace(/[^a-z0-9]/g, "_");
+      const safeMonth = (fee.month || "month").replace(/[^a-z0-9]/gi, "_");
+      const fileName = `receipt_${safeStudent}_${safeMonth}.pdf`;
+
+      doc.save(fileName);
+      showNotification("success", "Receipt PDF downloaded!");
+    } catch (err) {
+      console.error("Failed to generate PDF receipt:", err);
+      showNotification("error", "Failed to generate receipt PDF.");
+    }
+  };
+
+  // WhatsApp Fee Reminder Button Logic
+  const handleWhatsAppReminder = (rec: FeeRecord) => {
+    const student = students.find((s) => s.id === rec.student_id);
+    const rawPhone = student?.phone ? student.phone.trim() : "";
+    let cleanPhone = rawPhone.replace(/[^0-9]/g, "");
+    if (cleanPhone.startsWith("03")) {
+      cleanPhone = "92" + cleanPhone.slice(1);
+    } else if (cleanPhone.startsWith("3") && cleanPhone.length === 10) {
+      cleanPhone = "92" + cleanPhone;
+    }
+
+    const studentName = student?.name || getStudentName(rec);
+    const studentClass = student?.class || getStudentClass(rec) || "";
+    const amountVal = Number(rec.amount || 0).toLocaleString();
+    const classStr = studentClass ? ` (${studentClass})` : "";
+    const message = `Dear Parent, Fee for ${studentName}${classStr} for ${rec.month} Rs.${amountVal} is Pending. - OA Smart School`;
+
+    const targetUrl = cleanPhone
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
+
+    window.open(targetUrl, "_blank");
   };
 
   const handleSaveTeacher = async (e: React.FormEvent) => {
@@ -1198,148 +1440,150 @@ export default function Home() {
           {activeTab === "dashboard" && (
             <div className="space-y-6">
               {/* 8 VIBRANT COLORFUL CARDS WITH REAL DATA OR ZERO */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
                 {/* Card 1: Unpaid Fees (Red bg-[#e74c3c]) */}
-                <div className="bg-[#e74c3c] rounded-lg p-4 text-white shadow-lg relative overflow-hidden flex flex-col justify-between group">
-                  <CreditCard className="w-20 h-20 absolute -right-3 -top-3 opacity-20 text-white pointer-events-none" />
+                <div className="bg-[#e74c3c] rounded-lg p-3 text-white shadow-md relative overflow-hidden flex flex-col justify-between group">
+                  <CreditCard className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
                   <div>
-                    <h3 className="text-3xl sm:text-4xl font-bold tracking-tight mb-1">
-                      {pendingFeeCount}
+                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
+                      {pendingFeeCount} Unpaid
                     </h3>
-                    <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Unpaid Fees</p>
+                    <p className="text-xs sm:text-sm font-medium opacity-90 text-white">
+                      Rs. {unpaidFeeDue.toLocaleString()} Due
+                    </p>
                   </div>
                   <div
                     onClick={() => setActiveTab("fees")}
-                    className="bg-black/15 -mx-4 -mb-4 mt-4 px-4 py-1.5 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
+                    className="bg-black/15 -mx-3 -mb-3 mt-3 px-3 py-1 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
                   >
                     <span>More info</span>
-                    <ChevronRight className="w-4 h-4" />
+                    <ChevronRight className="w-3.5 h-3.5" />
                   </div>
                 </div>
 
                 {/* Card 2: Total Income This Year (Light Blue bg-[#00a8e8]) */}
-                <div className="bg-[#00a8e8] rounded-lg p-4 text-white shadow-lg relative overflow-hidden flex flex-col justify-between group">
-                  <DollarSign className="w-20 h-20 absolute -right-3 -top-3 opacity-20 text-white pointer-events-none" />
+                <div className="bg-[#00a8e8] rounded-lg p-3 text-white shadow-md relative overflow-hidden flex flex-col justify-between group">
+                  <DollarSign className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
                   <div>
-                    <h3 className="text-3xl sm:text-4xl font-bold tracking-tight mb-1">
-                      Rs. {totalIncomeAllTime.toLocaleString()}
+                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
+                      Rs. {totalIncomeThisYear.toLocaleString()}
                     </h3>
                     <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Total Income This Year</p>
                   </div>
                   <div
                     onClick={() => setActiveTab("fees")}
-                    className="bg-black/15 -mx-4 -mb-4 mt-4 px-4 py-1.5 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
+                    className="bg-black/15 -mx-3 -mb-3 mt-3 px-3 py-1 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
                   >
                     <span>More info</span>
-                    <ChevronRight className="w-4 h-4" />
+                    <ChevronRight className="w-3.5 h-3.5" />
                   </div>
                 </div>
 
                 {/* Card 3: Income This Month (Green bg-[#27ae60]) */}
-                <div className="bg-[#27ae60] rounded-lg p-4 text-white shadow-lg relative overflow-hidden flex flex-col justify-between group">
-                  <BarChart3 className="w-20 h-20 absolute -right-3 -top-3 opacity-20 text-white pointer-events-none" />
+                <div className="bg-[#27ae60] rounded-lg p-3 text-white shadow-md relative overflow-hidden flex flex-col justify-between group">
+                  <BarChart3 className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
                   <div>
-                    <h3 className="text-3xl sm:text-4xl font-bold tracking-tight mb-1">
+                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
                       Rs. {totalIncomeThisMonth.toLocaleString()}
                     </h3>
                     <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Income This Month</p>
                   </div>
                   <div
                     onClick={() => setActiveTab("fees")}
-                    className="bg-black/15 -mx-4 -mb-4 mt-4 px-4 py-1.5 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
+                    className="bg-black/15 -mx-3 -mb-3 mt-3 px-3 py-1 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
                   >
                     <span>More info</span>
-                    <ChevronRight className="w-4 h-4" />
+                    <ChevronRight className="w-3.5 h-3.5" />
                   </div>
                 </div>
 
                 {/* Card 4: Income Today (Dark Blue bg-[#2471a3]) */}
-                <div className="bg-[#2471a3] rounded-lg p-4 text-white shadow-lg relative overflow-hidden flex flex-col justify-between group">
-                  <PieChart className="w-20 h-20 absolute -right-3 -top-3 opacity-20 text-white pointer-events-none" />
+                <div className="bg-[#2471a3] rounded-lg p-3 text-white shadow-md relative overflow-hidden flex flex-col justify-between group">
+                  <PieChart className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
                   <div>
-                    <h3 className="text-3xl sm:text-4xl font-bold tracking-tight mb-1">
+                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
                       Rs. {incomeToday.toLocaleString()}
                     </h3>
                     <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Income Today</p>
                   </div>
                   <div
                     onClick={() => setActiveTab("fees")}
-                    className="bg-black/15 -mx-4 -mb-4 mt-4 px-4 py-1.5 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
+                    className="bg-black/15 -mx-3 -mb-3 mt-3 px-3 py-1 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
                   >
                     <span>More info</span>
-                    <ChevronRight className="w-4 h-4" />
+                    <ChevronRight className="w-3.5 h-3.5" />
                   </div>
                 </div>
 
                 {/* Card 5: Profit This Month (Green bg-[#27ae60]) */}
-                <div className="bg-[#27ae60] rounded-lg p-4 text-white shadow-lg relative overflow-hidden flex flex-col justify-between group">
-                  <Activity className="w-20 h-20 absolute -right-3 -top-3 opacity-20 text-white pointer-events-none" />
+                <div className="bg-[#27ae60] rounded-lg p-3 text-white shadow-md relative overflow-hidden flex flex-col justify-between group">
+                  <Activity className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
                   <div>
-                    <h3 className="text-3xl sm:text-4xl font-bold tracking-tight mb-1">
+                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
                       Rs. {netProfitThisMonth.toLocaleString()}
                     </h3>
                     <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Profit This Month</p>
                   </div>
                   <div
                     onClick={() => setActiveTab("expenses")}
-                    className="bg-black/15 -mx-4 -mb-4 mt-4 px-4 py-1.5 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
+                    className="bg-black/15 -mx-3 -mb-3 mt-3 px-3 py-1 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
                   >
                     <span>More info</span>
-                    <ChevronRight className="w-4 h-4" />
+                    <ChevronRight className="w-3.5 h-3.5" />
                   </div>
                 </div>
 
                 {/* Card 6: Total Expense This Year (Reddish Brown bg-[#c0392b]) */}
-                <div className="bg-[#c0392b] rounded-lg p-4 text-white shadow-lg relative overflow-hidden flex flex-col justify-between group">
-                  <TrendingUp className="w-20 h-20 absolute -right-3 -top-3 opacity-20 text-white pointer-events-none" />
+                <div className="bg-[#c0392b] rounded-lg p-3 text-white shadow-md relative overflow-hidden flex flex-col justify-between group">
+                  <TrendingUp className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
                   <div>
-                    <h3 className="text-3xl sm:text-4xl font-bold tracking-tight mb-1">
-                      Rs. {totalExpenseAllTime.toLocaleString()}
+                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
+                      Rs. {totalExpenseThisYear.toLocaleString()}
                     </h3>
                     <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Total Expense This Year</p>
                   </div>
                   <div
                     onClick={() => setActiveTab("expenses")}
-                    className="bg-black/15 -mx-4 -mb-4 mt-4 px-4 py-1.5 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
+                    className="bg-black/15 -mx-3 -mb-3 mt-3 px-3 py-1 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
                   >
                     <span>More info</span>
-                    <ChevronRight className="w-4 h-4" />
+                    <ChevronRight className="w-3.5 h-3.5" />
                   </div>
                 </div>
 
                 {/* Card 7: Expense This Month (Orange bg-[#f39c12]) */}
-                <div className="bg-[#f39c12] rounded-lg p-4 text-white shadow-lg relative overflow-hidden flex flex-col justify-between group">
-                  <Info className="w-20 h-20 absolute -right-3 -top-3 opacity-20 text-white pointer-events-none" />
+                <div className="bg-[#f39c12] rounded-lg p-3 text-white shadow-lg relative overflow-hidden flex flex-col justify-between group">
+                  <Info className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
                   <div>
-                    <h3 className="text-3xl sm:text-4xl font-bold tracking-tight mb-1">
+                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
                       Rs. {totalExpenseThisMonth.toLocaleString()}
                     </h3>
                     <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Expense This Month</p>
                   </div>
                   <div
                     onClick={() => setActiveTab("expenses")}
-                    className="bg-black/15 -mx-4 -mb-4 mt-4 px-4 py-1.5 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
+                    className="bg-black/15 -mx-3 -mb-3 mt-3 px-3 py-1 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
                   >
                     <span>More info</span>
-                    <ChevronRight className="w-4 h-4" />
+                    <ChevronRight className="w-3.5 h-3.5" />
                   </div>
                 </div>
 
                 {/* Card 8: Expense Today (Light Blue bg-[#00a8e8]) */}
-                <div className="bg-[#00a8e8] rounded-lg p-4 text-white shadow-lg relative overflow-hidden flex flex-col justify-between group">
-                  <ShoppingBag className="w-20 h-20 absolute -right-3 -top-3 opacity-20 text-white pointer-events-none" />
+                <div className="bg-[#00a8e8] rounded-lg p-3 text-white shadow-lg relative overflow-hidden flex flex-col justify-between group">
+                  <ShoppingBag className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
                   <div>
-                    <h3 className="text-3xl sm:text-4xl font-bold tracking-tight mb-1">
+                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
                       Rs. {expenseToday.toLocaleString()}
                     </h3>
                     <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Expense Today</p>
                   </div>
                   <div
                     onClick={() => setActiveTab("expenses")}
-                    className="bg-black/15 -mx-4 -mb-4 mt-4 px-4 py-1.5 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
+                    className="bg-black/15 -mx-3 -mb-3 mt-3 px-3 py-1 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
                   >
                     <span>More info</span>
-                    <ChevronRight className="w-4 h-4" />
+                    <ChevronRight className="w-3.5 h-3.5" />
                   </div>
                 </div>
               </div>
@@ -1746,21 +1990,48 @@ export default function Home() {
                                   </span>
                                 )}
                               </td>
-                              <td className="py-3.5 px-4 text-right space-x-1">
-                                {!isPaid && (
+                              <td className="py-3.5 px-4 text-right">
+                                <div className="flex items-center justify-end gap-1.5 flex-nowrap min-w-max">
+                                  {/* PDF Receipt Action */}
                                   <button
-                                    onClick={() => handleMarkFeePaid(rec.id)}
-                                    className="px-2.5 py-1 bg-emerald-600 text-white rounded-md text-xs font-semibold hover:bg-emerald-700 cursor-pointer"
+                                    onClick={() => generateFeeReceipt(rec)}
+                                    title="Download PDF Receipt"
+                                    className="h-7 w-7 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
                                   >
-                                    Paid
+                                    <FileText className="w-3.5 h-3.5" />
                                   </button>
-                                )}
-                                <button
-                                  onClick={() => handleDeleteFee(rec.id)}
-                                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 cursor-pointer"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+
+                                  {/* WhatsApp Reminder Action */}
+                                  <button
+                                    onClick={() => handleWhatsAppReminder(rec)}
+                                    title="Send WhatsApp Reminder"
+                                    className="h-7 w-7 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
+                                  >
+                                    <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                                      <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+                                    </svg>
+                                  </button>
+
+                                  {/* Mark as Paid Action (if pending) */}
+                                  {!isPaid && (
+                                    <button
+                                      onClick={() => handleMarkFeePaid(rec.id)}
+                                      title="Mark as Paid"
+                                      className="h-7 w-7 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
+                                    >
+                                      <CheckCircle className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+
+                                  {/* Delete Action */}
+                                  <button
+                                    onClick={() => handleDeleteFee(rec.id)}
+                                    title="Delete Fee Record"
+                                    className="h-7 w-7 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
