@@ -142,8 +142,12 @@ export default function Home() {
 
   // Auth & Multi-tenant State
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [schoolId, setSchoolId] = useState<number | null>(null);
+  const [schoolId, setSchoolId] = useState<number | string | null>(null);
   const [schoolName, setSchoolName] = useState<string>("OA Smart School");
+  const [availableSchools, setAvailableSchools] = useState<
+    Array<{ id: string | number; name: string; city?: string | null }>
+  >([]);
+  const [isSuperAdminUser, setIsSuperAdminUser] = useState<boolean>(false);
 
   // Data State
   const [students, setStudents] = useState<Student[]>([]);
@@ -220,14 +224,14 @@ export default function Home() {
   };
 
   // Helper to dynamically resolve school_id from schools table using owner_email
-  const resolveSchoolId = async (userEmail: string): Promise<number | null> => {
+  const resolveSchoolId = async (userEmail?: string | null): Promise<string | number | null> => {
     if (!userEmail) return schoolId;
     try {
       const { data: schoolData } = await supabase
         .from("schools")
         .select("id, name")
         .eq("owner_email", userEmail)
-        .single();
+        .maybeSingle();
 
       if (schoolData && schoolData.id) {
         setSchoolName(schoolData.name || "OA Smart School");
@@ -240,18 +244,43 @@ export default function Home() {
     return schoolId;
   };
 
-  // Auth Check & Data Fetching
-  const fetchAllData = async (targetSchoolId?: number | string) => {
-    const sId = targetSchoolId || schoolId;
+  // Helper to determine active school_id for writes
+  const getActionSchoolId = async (): Promise<string | number | null> => {
+    if (schoolId && schoolId !== "all") return schoolId;
+    const resolved = await resolveSchoolId(currentUser?.email);
+    if (resolved && resolved !== "all") return resolved;
+    if (availableSchools.length > 0) return availableSchools[0].id;
+    return schoolId;
+  };
+
+  // Auth Check & Data Fetching (Supports "all" or specific school_id)
+  const fetchAllData = async (targetSchoolId?: number | string | null) => {
+    const sId = targetSchoolId !== undefined ? targetSchoolId : schoolId;
     if (!sId) return;
     try {
       setLoading(true);
+
+      let studentsQuery = supabase.from("students").select("*").order("id", { ascending: false });
+      let feeQuery = supabase.from("fee_records").select("*, students(name, class)").order("id", { ascending: false });
+      let teachersQuery = supabase.from("teachers").select("*").order("id", { ascending: false });
+      let salaryQuery = supabase.from("salary_records").select("*, teachers(name)").order("id", { ascending: false });
+      let expensesQuery = supabase.from("expenses").select("*").order("id", { ascending: false });
+
+      // If specific school selected, apply school_id filter; if "all", fetch cross-tenant aggregation
+      if (sId && sId !== "all") {
+        studentsQuery = studentsQuery.eq("school_id", sId);
+        feeQuery = feeQuery.eq("school_id", sId);
+        teachersQuery = teachersQuery.eq("school_id", sId);
+        salaryQuery = salaryQuery.eq("school_id", sId);
+        expensesQuery = expensesQuery.eq("school_id", sId);
+      }
+
       const [studentsRes, feeRecordsRes, teachersRes, salaryRecordsRes, expensesRes] = await Promise.all([
-        supabase.from("students").select("*").eq("school_id", sId).order("id", { ascending: false }),
-        supabase.from("fee_records").select("*, students(name, class)").eq("school_id", sId).order("id", { ascending: false }),
-        supabase.from("teachers").select("*").eq("school_id", sId).order("id", { ascending: false }),
-        supabase.from("salary_records").select("*, teachers(name)").eq("school_id", sId).order("id", { ascending: false }),
-        supabase.from("expenses").select("*").eq("school_id", sId).order("id", { ascending: false }),
+        studentsQuery,
+        feeQuery,
+        teachersQuery,
+        salaryQuery,
+        expensesQuery,
       ]);
 
       setStudents(studentsRes.data || []);
@@ -265,6 +294,37 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Switcher Handler for Super Admin
+  const handleSelectSchool = async (selectedId: string) => {
+    setSchoolId(selectedId);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("oa_superadmin_selected_school_id", selectedId);
+    }
+
+    if (selectedId === "all") {
+      setSchoolName("All Schools (Aggregated View)");
+      if (typeof window !== "undefined") {
+        localStorage.setItem("oa_superadmin_selected_school_name", "All Schools");
+      }
+    } else {
+      const matched = availableSchools.find((s) => String(s.id) === String(selectedId));
+      if (matched) {
+        setSchoolName(matched.name);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("oa_superadmin_selected_school_name", matched.name);
+        }
+      }
+    }
+
+    await fetchAllData(selectedId);
+    showNotification(
+      "success",
+      selectedId === "all"
+        ? "Switched to All Schools (Aggregated View)"
+        : `Switched context to ${availableSchools.find((s) => String(s.id) === String(selectedId))?.name || "Selected School"}`
+    );
   };
 
   useEffect(() => {
@@ -281,16 +341,56 @@ export default function Home() {
 
       setCurrentUser(user);
 
-      // Resolve exact school_id from schools table using user.email
-      let sId = user.user_metadata?.school_id || user.app_metadata?.school_id;
+      // Verify if Super Admin
+      const isSuper = isSuperAdmin(user.email) || user.email === "mnuhbhatti333@gmail.com";
+      setIsSuperAdminUser(isSuper);
 
-      if (user.email) {
-        const resolvedId = await resolveSchoolId(user.email);
-        if (resolvedId) sId = resolvedId;
+      let schoolsList: Array<{ id: string | number; name: string; city?: string | null }> = [];
+      if (isSuper) {
+        const { data: allSchools } = await supabase
+          .from("schools")
+          .select("id, name, city")
+          .order("id", { ascending: true });
+        schoolsList = allSchools || [];
+        setAvailableSchools(schoolsList);
+      }
+
+      // Check localStorage for super admin selected school or impersonation
+      let sId: string | number | null = null;
+      if (isSuper && typeof window !== "undefined") {
+        const stored = localStorage.getItem("oa_superadmin_selected_school_id");
+        if (stored) {
+          sId = stored;
+        }
+      }
+
+      // If not stored in localStorage, resolve user school or default to "all" for super admin
+      if (!sId) {
+        let resolvedId = user.user_metadata?.school_id || user.app_metadata?.school_id;
+        if (user.email) {
+          const lookedUpId = await resolveSchoolId(user.email);
+          if (lookedUpId) resolvedId = lookedUpId;
+        }
+        sId = isSuper ? (resolvedId || "all") : resolvedId;
       }
 
       if (sId) {
         setSchoolId(sId);
+        if (sId === "all") {
+          setSchoolName("All Schools (Aggregated View)");
+        } else {
+          const matched = schoolsList.find((s) => String(s.id) === String(sId));
+          if (matched) {
+            setSchoolName(matched.name);
+          } else {
+            const { data: singleSch } = await supabase
+              .from("schools")
+              .select("name")
+              .eq("id", sId)
+              .maybeSingle();
+            if (singleSch) setSchoolName(singleSch.name);
+          }
+        }
         await fetchAllData(sId);
       } else {
         setErrorMsg("No school associated with this user. Please sign up or contact support.");
@@ -547,7 +647,7 @@ export default function Home() {
   const handleSaveStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSaving) return;
-    const currentSchoolId = (await resolveSchoolId(currentUser?.email)) || schoolId;
+    const currentSchoolId = await getActionSchoolId();
     if (!currentSchoolId) return showNotification("error", "No school associated with session.");
     if (!studentForm.name || !studentForm.class) {
       showNotification("error", "Name and Class are required fields.");
@@ -566,13 +666,14 @@ export default function Home() {
     try {
       setIsSaving(true);
       if (editingStudentId) {
-        const { data, error } = await supabase
+        let updateQuery = supabase
           .from("students")
           .update(payload)
-          .eq("id", editingStudentId)
-          .eq("school_id", currentSchoolId)
-          .select()
-          .single();
+          .eq("id", editingStudentId);
+        if (schoolId && schoolId !== "all") {
+          updateQuery = updateQuery.eq("school_id", currentSchoolId);
+        }
+        const { data, error } = await updateQuery.select().single();
         if (error) throw error;
         if (data) {
           setStudents((prev) => prev.map((s) => (s.id === editingStudentId ? data : s)));
@@ -621,11 +722,11 @@ export default function Home() {
     if (!confirm("Are you sure you want to delete this student?")) return;
     try {
       setStudents((prev) => prev.filter((s) => s.id !== id));
-      const { error } = await supabase
-        .from("students")
-        .delete()
-        .eq("id", id)
-        .eq("school_id", schoolId);
+      let delQuery = supabase.from("students").delete().eq("id", id);
+      if (schoolId && schoolId !== "all") {
+        delQuery = delQuery.eq("school_id", schoolId);
+      }
+      const { error } = await delQuery;
       if (error) throw error;
       showNotification("success", "Student deleted successfully!");
     } catch (err: any) {
@@ -637,7 +738,7 @@ export default function Home() {
   const handleSaveFee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSaving) return;
-    const currentSchoolId = (await resolveSchoolId(currentUser?.email)) || schoolId;
+    const currentSchoolId = await getActionSchoolId();
     if (!currentSchoolId) return showNotification("error", "No school associated with session.");
     if (!feeForm.student_id || !feeForm.amount || !feeForm.month) {
       showNotification("error", "Please select a student, month, and amount.");
@@ -682,11 +783,11 @@ export default function Home() {
       setFeeRecords((prev) =>
         prev.map((f) => (f.id === id ? { ...f, status: "paid" } : f))
       );
-      const { error } = await supabase
-        .from("fee_records")
-        .update({ status: "paid" })
-        .eq("id", id)
-        .eq("school_id", schoolId);
+      let updateQuery = supabase.from("fee_records").update({ status: "paid" }).eq("id", id);
+      if (schoolId && schoolId !== "all") {
+        updateQuery = updateQuery.eq("school_id", schoolId);
+      }
+      const { error } = await updateQuery;
       if (error) throw error;
       showNotification("success", "Fee marked as Paid!");
     } catch (err: any) {
@@ -699,11 +800,11 @@ export default function Home() {
     if (!confirm("Are you sure you want to delete this fee record?")) return;
     try {
       setFeeRecords((prev) => prev.filter((f) => f.id !== id));
-      const { error } = await supabase
-        .from("fee_records")
-        .delete()
-        .eq("id", id)
-        .eq("school_id", schoolId);
+      let delQuery = supabase.from("fee_records").delete().eq("id", id);
+      if (schoolId && schoolId !== "all") {
+        delQuery = delQuery.eq("school_id", schoolId);
+      }
+      const { error } = await delQuery;
       if (error) throw error;
       showNotification("success", "Fee record deleted!");
     } catch (err: any) {
@@ -925,7 +1026,7 @@ export default function Home() {
   const handleSaveTeacher = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSaving) return;
-    const currentSchoolId = (await resolveSchoolId(currentUser?.email)) || schoolId;
+    const currentSchoolId = await getActionSchoolId();
     if (!currentSchoolId) return showNotification("error", "No school associated with session.");
     if (!teacherForm.name) {
       showNotification("error", "Teacher name is required.");
@@ -942,13 +1043,14 @@ export default function Home() {
     try {
       setIsSaving(true);
       if (editingTeacherId) {
-        const { data, error } = await supabase
+        let updateQuery = supabase
           .from("teachers")
           .update(payload)
-          .eq("id", editingTeacherId)
-          .eq("school_id", currentSchoolId)
-          .select()
-          .single();
+          .eq("id", editingTeacherId);
+        if (schoolId && schoolId !== "all") {
+          updateQuery = updateQuery.eq("school_id", schoolId);
+        }
+        const { data, error } = await updateQuery.select().single();
         if (error) throw error;
         if (data) {
           setTeachers((prev) => prev.map((t) => (t.id === editingTeacherId ? data : t)));
@@ -989,11 +1091,11 @@ export default function Home() {
     if (!confirm("Are you sure you want to delete this staff member?")) return;
     try {
       setTeachers((prev) => prev.filter((t) => t.id !== id));
-      const { error } = await supabase
-        .from("teachers")
-        .delete()
-        .eq("id", id)
-        .eq("school_id", schoolId);
+      let delQuery = supabase.from("teachers").delete().eq("id", id);
+      if (schoolId && schoolId !== "all") {
+        delQuery = delQuery.eq("school_id", schoolId);
+      }
+      const { error } = await delQuery;
       if (error) throw error;
       showNotification("success", "Staff member deleted!");
     } catch (err: any) {
@@ -1005,7 +1107,7 @@ export default function Home() {
   const handleSaveSalary = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSaving) return;
-    const currentSchoolId = (await resolveSchoolId(currentUser?.email)) || schoolId;
+    const currentSchoolId = await getActionSchoolId();
     if (!currentSchoolId) return showNotification("error", "No school associated with session.");
     if (!salaryForm.teacher_id || !salaryForm.amount || !salaryForm.month) {
       showNotification("error", "Please select staff, month, and amount.");
@@ -1050,11 +1152,14 @@ export default function Home() {
       setSalaryRecords((prev) =>
         prev.map((s) => (s.id === id ? { ...s, status: "paid" } : s))
       );
-      const { error } = await supabase
+      let updQuery = supabase
         .from("salary_records")
         .update({ status: "paid" })
-        .eq("id", id)
-        .eq("school_id", schoolId);
+        .eq("id", id);
+      if (schoolId && schoolId !== "all") {
+        updQuery = updQuery.eq("school_id", schoolId);
+      }
+      const { error } = await updQuery;
       if (error) throw error;
       showNotification("success", "Salary marked as Paid!");
     } catch (err: any) {
@@ -1067,11 +1172,11 @@ export default function Home() {
     if (!confirm("Are you sure you want to delete this salary record?")) return;
     try {
       setSalaryRecords((prev) => prev.filter((s) => s.id !== id));
-      const { error } = await supabase
-        .from("salary_records")
-        .delete()
-        .eq("id", id)
-        .eq("school_id", schoolId);
+      let delQuery = supabase.from("salary_records").delete().eq("id", id);
+      if (schoolId && schoolId !== "all") {
+        delQuery = delQuery.eq("school_id", schoolId);
+      }
+      const { error } = await delQuery;
       if (error) throw error;
       showNotification("success", "Salary record deleted!");
     } catch (err: any) {
@@ -1083,7 +1188,7 @@ export default function Home() {
   const handleSaveExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSaving) return;
-    const currentSchoolId = (await resolveSchoolId(currentUser?.email)) || schoolId;
+    const currentSchoolId = await getActionSchoolId();
     if (!currentSchoolId) return showNotification("error", "No school associated with session.");
     if (!expenseForm.title || !expenseForm.amount) {
       showNotification("error", "Title and Amount are required.");
@@ -1127,11 +1232,11 @@ export default function Home() {
     if (!confirm("Are you sure you want to delete this expense record?")) return;
     try {
       setExpenses((prev) => prev.filter((e) => e.id !== id));
-      const { error } = await supabase
-        .from("expenses")
-        .delete()
-        .eq("id", id)
-        .eq("school_id", schoolId);
+      let delQuery = supabase.from("expenses").delete().eq("id", id);
+      if (schoolId && schoolId !== "all") {
+        delQuery = delQuery.eq("school_id", schoolId);
+      }
+      const { error } = await delQuery;
       if (error) throw error;
       showNotification("success", "Record deleted!");
     } catch (err: any) {
@@ -1376,6 +1481,28 @@ export default function Home() {
                 <Building className="w-3.5 h-3.5 text-emerald-400" />
                 Main Campus
               </span>
+              {isSuperAdminUser && (
+                <div className="flex items-center gap-1.5 bg-[#172e4c] border border-yellow-400/60 rounded-md px-2 py-1 shadow-inner">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400 shrink-0">
+                    Switch School:
+                  </span>
+                  <select
+                    value={String(schoolId || "all")}
+                    onChange={(e) => handleSelectSchool(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer max-w-[200px] truncate"
+                    title="Super Admin School Selector"
+                  >
+                    <option value="all" className="bg-[#1e3a5f] text-white">
+                      All Schools (Aggregated)
+                    </option>
+                    {availableSchools.map((s) => (
+                      <option key={s.id} value={String(s.id)} className="bg-[#1e3a5f] text-white">
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             <button className="p-2 rounded-lg bg-[#2c4d75] text-white hover:bg-blue-800 relative cursor-pointer">
