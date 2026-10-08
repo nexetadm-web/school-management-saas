@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="nexetaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7c3aed" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+    <filter id="subtleShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#0f172a" flood-opacity="0.12" />
+    </filter>
+  </defs>
+
+  <!-- Background: White Rounded Square with soft border -->
+  <rect x="24" y="24" width="464" height="464" rx="112" fill="#ffffff" stroke="#e2e8f0" stroke-width="8" filter="url(#subtleShadow)" />
+
+  <!-- Main Letter N Shape -->
+  <g fill="url(#nexetaGrad)">
+    <!-- Left vertical bar -->
+    <rect x="116" y="180" width="68" height="236" rx="16" />
+    
+    <!-- Right vertical bar -->
+    <rect x="328" y="180" width="68" height="236" rx="16" />
+    
+    <!-- Diagonal bar connecting them -->
+    <path d="M 124 192 L 340 404 C 348 412 360 416 372 416 C 392 416 396 398 396 398 L 396 350 L 180 138 C 172 130 160 126 148 126 C 128 126 124 144 124 144 Z" />
+  </g>
+
+  <!-- Graduation Cap (Mortarboard) positioned proudly at top-center/left -->
+  <g transform="translate(196, 68)">
+    <!-- Shadow under cap -->
+    <ellipse cx="60" cy="74" rx="66" ry="18" fill="#1e1b4b" opacity="0.18" />
+
+    <!-- Cap Skull Base -->
+    <path d="M 28 54 Q 60 76 92 54 L 92 72 Q 60 92 28 72 Z" fill="#4338ca" />
+
+    <!-- Diamond Mortarboard Top -->
+    <polygon points="60,16 126,50 60,82 -6,50" fill="url(#nexetaGrad)" stroke="#ffffff" stroke-width="4" />
+
+    <!-- Button on Top Center -->
+    <circle cx="60" cy="50" r="7" fill="#fbbf24" stroke="#ffffff" stroke-width="2" />
+
+    <!-- Gold Tassel -->
+    <path d="M 60 50 Q 18 64 8 88 Q 12 110 14 120" fill="none" stroke="url(#goldGrad)" stroke-width="5" stroke-linecap="round" />
+    <polygon points="10,116 18,116 16,134 8,134" fill="url(#goldGrad)" />
+    <circle cx="13" cy="116" r="3" fill="#d97706" />
+  </g>
+</svg>

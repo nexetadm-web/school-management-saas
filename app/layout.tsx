@@ -14,8 +14,18 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Smart Fee Manager | Premium School SaaS",
-  description: "Next-gen multi-tenant school fee management platform",
+  title: "Nexeta School | Smart Fee & School SaaS",
+  description: "Next-gen multi-tenant school management and fee automation SaaS platform",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.png", type: "image/png", sizes: "512x512" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
