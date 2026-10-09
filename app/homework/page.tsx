@@ -36,15 +36,9 @@ interface HomeworkItem {
   created_at?: string;
 }
 
-const DEFAULT_SUBJECTS = [
-  "English",
-  "Urdu",
-  "Mathematics",
-  "General Science",
-  "Islamiyat",
-  "Social Studies",
-  "Computer Science",
-];
+import { PAKISTAN_BOARD_SUBJECTS } from "@/lib/subjects-data";
+
+const DEFAULT_SUBJECTS = PAKISTAN_BOARD_SUBJECTS.map((s) => s.name);
 
 export default function HomeworkPage() {
   const router = useRouter();

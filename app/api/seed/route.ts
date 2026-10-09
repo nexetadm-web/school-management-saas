@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { PAKISTAN_BOARD_SUBJECTS } from "@/lib/subjects-data";
 
 export const dynamic = "force-dynamic";
 
@@ -455,6 +456,17 @@ export async function GET() {
         totalExpensesCount += accountingBatch.length;
         console.log(`[SEEDER] Inserted ${accountingBatch.length} accounting entries (8 expenses, 2 other income)`);
       }
+
+      // 7. Seed 21 Pakistan Board Subjects
+      try {
+        const subjectsBatch = PAKISTAN_BOARD_SUBJECTS.map((sub) => ({
+          school_id: schoolId,
+          name: sub.name,
+          class: sub.classes ? sub.classes.join(", ") : "All",
+        }));
+        await supabase.from("subjects").upsert(subjectsBatch, { onConflict: "school_id,name" });
+        console.log(`[SEEDER] Seeded ${subjectsBatch.length} Pakistan Board subjects for "${schoolDef.name}"`);
+      } catch (subErr) {}
 
       results.push({
         school: schoolDef.name,

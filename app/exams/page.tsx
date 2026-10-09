@@ -51,20 +51,19 @@ interface Exam {
   school_id?: number | string;
 }
 
+import { PAKISTAN_BOARD_SUBJECTS } from "@/lib/subjects-data";
+
 interface Subject {
   id: number | string;
   name: string;
   total_marks: number;
 }
 
-const DEFAULT_SUBJECTS: Subject[] = [
-  { id: 1, name: "English", total_marks: 100 },
-  { id: 2, name: "Urdu", total_marks: 100 },
-  { id: 3, name: "Mathematics", total_marks: 100 },
-  { id: 4, name: "General Science", total_marks: 100 },
-  { id: 5, name: "Islamiyat", total_marks: 100 },
-  { id: 6, name: "Social Studies", total_marks: 100 },
-];
+const DEFAULT_SUBJECTS: Subject[] = PAKISTAN_BOARD_SUBJECTS.map((s) => ({
+  id: s.id,
+  name: s.name,
+  total_marks: s.total_marks,
+}));
 
 export default function ExamsAndReportCardPage() {
   const router = useRouter();
@@ -145,6 +144,34 @@ export default function ExamsAndReportCardPage() {
       if (loadedExams.length > 0) {
         setSelectedExamId(loadedExams[0].id);
       }
+
+      // 3. Load dynamic subjects
+      try {
+        let subList: Subject[] = [];
+        const { data: dbSubs } = await supabase.from("subjects").select("*");
+        if (dbSubs && dbSubs.length > 0) {
+          subList = dbSubs.map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            total_marks: Number(s.total_marks || 100),
+          }));
+        } else {
+          const stored = typeof window !== "undefined" ? localStorage.getItem(`oa_school_subjects_${ctx.schoolId || "all"}`) : null;
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              subList = parsed.map((s: any) => ({
+                id: s.id,
+                name: s.name,
+                total_marks: Number(s.total_marks || 100),
+              }));
+            }
+          }
+        }
+        if (subList.length > 0) {
+          setSubjects(subList);
+        }
+      } catch (subErr) {}
 
       loadSavedMarks(loadedExams[0]?.id || "1", ctx.schoolId);
     } catch (err: any) {
