@@ -44,6 +44,8 @@ import {
   MessageCircle,
   Sparkles,
   Award,
+  BookOpen,
+  FileCheck,
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import {
@@ -1258,13 +1260,16 @@ export default function Home() {
     { id: "expenses", label: "Accounting & Expenses", icon: Receipt },
   ];
 
-  // 5 NEW SAAS MODULES
+  // SAAS MODULES (ALL 8 MODULES)
   const saasToolsNav = [
     { href: "/fees-reminder", label: "WhatsApp Reminders", icon: MessageCircle, badge: "Notice" },
+    { href: "/fee-challan", label: "Bank Fee Challan", icon: FileText, badge: "3-Part PDF" },
     { href: "/id-cards", label: "ID Card Generator", icon: CreditCard, badge: "Print A4" },
     { href: "/exams", label: "Exams & Report Cards", icon: Award, badge: "Report" },
     { href: "/attendance", label: "Daily Attendance", icon: UserCheck, badge: "P/A/L" },
     { href: "/attendance-report", label: "Attendance Report", icon: BarChart3, badge: "Calendar" },
+    { href: "/admissions", label: "Online Admissions", icon: FileCheck, badge: "Desk" },
+    { href: "/homework", label: "Daily Homework", icon: BookOpen, badge: "Diary" },
   ];
 
   return (
@@ -1655,7 +1660,7 @@ export default function Home() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   <Link
                     href="/fees-reminder"
                     className="p-3.5 rounded-xl border border-emerald-100 bg-emerald-50/40 hover:bg-emerald-50 hover:border-emerald-300 transition-all group flex items-start gap-3 shadow-2xs"
@@ -1669,6 +1674,23 @@ export default function Home() {
                       </h3>
                       <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
                         Defaulters notice via 1-click WhatsApp
+                      </p>
+                    </div>
+                  </Link>
+
+                  <Link
+                    href="/fee-challan"
+                    className="p-3.5 rounded-xl border border-sky-100 bg-sky-50/40 hover:bg-sky-50 hover:border-sky-300 transition-all group flex items-start gap-3 shadow-2xs"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-sky-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-bold text-slate-900 group-hover:text-sky-700 truncate">
+                        Bank Fee Challan
+                      </h3>
+                      <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
+                        3-part A4 voucher with scissor cut
                       </p>
                     </div>
                   </Link>
@@ -1719,7 +1741,58 @@ export default function Home() {
                         Daily Attendance
                       </h3>
                       <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
-                        1-click P / A / L & calendar report
+                        1-click P / A / L touch-friendly marking
+                      </p>
+                    </div>
+                  </Link>
+
+                  <Link
+                    href="/attendance-report"
+                    className="p-3.5 rounded-xl border border-emerald-100 bg-emerald-50/40 hover:bg-emerald-50 hover:border-emerald-300 transition-all group flex items-start gap-3 shadow-2xs"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                      <BarChart3 className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-bold text-slate-900 group-hover:text-emerald-700 truncate">
+                        Attendance Report
+                      </h3>
+                      <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
+                        Monthly calendar dots & export
+                      </p>
+                    </div>
+                  </Link>
+
+                  <Link
+                    href="/admissions"
+                    className="p-3.5 rounded-xl border border-purple-100 bg-purple-50/40 hover:bg-purple-50 hover:border-purple-300 transition-all group flex items-start gap-3 shadow-2xs"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                      <FileCheck className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-bold text-slate-900 group-hover:text-purple-700 truncate">
+                        Online Admissions Desk
+                      </h3>
+                      <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
+                        Public link & 1-click enroll desk
+                      </p>
+                    </div>
+                  </Link>
+
+                  <Link
+                    href="/homework"
+                    className="p-3.5 rounded-xl border border-teal-100 bg-teal-50/40 hover:bg-teal-50 hover:border-teal-300 transition-all group flex items-start gap-3 shadow-2xs"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                      <BookOpen className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-bold text-slate-900 group-hover:text-teal-700 truncate">
+                        Daily Homework Diary
+                      </h3>
+                      <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
+                        Daily diary with WhatsApp broadcast
                       </p>
                     </div>
                   </Link>

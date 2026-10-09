@@ -298,40 +298,40 @@ export default function IDCardGeneratorPage() {
       `}</style>
 
       {/* Top Header */}
-      <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-4 sm:px-6 py-3.5 shadow-xs no-print">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-3 sm:px-6 py-3 shadow-xs no-print">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
             <Link
               href="/"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer shrink-0"
             >
               <ArrowLeft className="w-4 h-4 text-slate-600" />
-              <span>Dashboard</span>
+              <span className="hidden xs:inline">Back</span>
             </Link>
             <div className="h-5 w-px bg-slate-200 hidden sm:block" />
-            <div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
                   <CreditCard className="w-4 h-4" />
                 </div>
-                <h1 className="text-base font-bold text-slate-900 tracking-tight">
+                <h1 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight truncate">
                   Student ID Card Generator
                 </h1>
                 <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
-                  8 Cards / A4 Sheet
+                  8 / Sheet
                 </span>
               </div>
-              <p className="text-xs text-slate-500 hidden sm:block">
-                Professional printable PVC/Paper ID cards with student photo, QR code & signature
+              <p className="text-[11px] text-slate-500 hidden sm:block truncate">
+                Printable PVC / Paper ID cards with student photo, QR code & signature
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             <button
               onClick={handleDownloadPDF}
               disabled={downloadingPdf || studentsToPrint.length === 0}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-2xs transition cursor-pointer"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-2xs transition cursor-pointer"
             >
               <Download className={`w-3.5 h-3.5 ${downloadingPdf ? "animate-bounce" : ""}`} />
               <span>{downloadingPdf ? "Exporting..." : "Download PDF"}</span>
@@ -340,7 +340,7 @@ export default function IDCardGeneratorPage() {
             <button
               onClick={handlePrint}
               disabled={studentsToPrint.length === 0}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition cursor-pointer"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
               <span>Print A4 ({studentsToPrint.length})</span>
@@ -528,6 +528,16 @@ export default function IDCardGeneratorPage() {
                 {pageStudents.map((student) => {
                   const qr = qrCodes[String(student.id)];
                   const schoolTitle = schoolContext?.schoolName || "OA SMART SCHOOL";
+                  const schoolInitials = schoolTitle
+                    .split(" ")
+                    .map((w: string) => w[0])
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase() || "OA";
+                  const schoolSub = schoolContext?.city
+                    ? `${schoolContext.city} • Session ${sessionYear}`
+                    : `Smart School System • Session ${sessionYear}`;
 
                   return (
                     <div
@@ -542,15 +552,23 @@ export default function IDCardGeneratorPage() {
                       {/* Top School Header Strip */}
                       <div className={`${themeStyles.headerBg} ${themeStyles.headerText} px-3 py-1.5 flex items-center justify-between`}>
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-yellow-400 text-[#1e3a5f] font-black text-[10px] flex items-center justify-center shadow-xs">
-                            OA
-                          </div>
+                          {schoolContext?.logoUrl ? (
+                            <img
+                              src={schoolContext.logoUrl}
+                              alt="Logo"
+                              className="w-6 h-6 rounded-full object-cover bg-white p-0.5 shadow-xs"
+                            />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-yellow-400 text-[#1e3a5f] font-black text-[10px] flex items-center justify-center shadow-xs">
+                              {schoolInitials}
+                            </div>
+                          )}
                           <div>
-                            <h2 className="text-[11px] font-black uppercase tracking-wide leading-tight truncate max-w-[170px]">
+                            <h2 className="text-[11px] font-black uppercase tracking-wide leading-tight truncate max-w-[170px]" title={schoolTitle}>
                               {schoolTitle}
                             </h2>
-                            <p className="text-[8px] opacity-85 leading-none">
-                              Smart School System • Session {sessionYear}
+                            <p className="text-[8px] opacity-85 leading-none truncate max-w-[170px]">
+                              {schoolSub}
                             </p>
                           </div>
                         </div>
