@@ -47,6 +47,8 @@ import {
   BookOpen,
   FileCheck,
   BookMarked,
+  Book,
+  Coins,
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import {
@@ -1286,6 +1288,12 @@ export default function Home() {
     { href: "/class-subjects", label: "Class Subjects", icon: BookMarked, badge: "Assign" },
   ];
 
+  // GOVT FUNDS REGISTERS (NSB & FTF)
+  const fundsNav = [
+    { href: "/nsb", label: "NSB کیش بک", icon: Book, badge: "فارم 8" },
+    { href: "/ftf", label: "FTF رجسٹر", icon: Coins, badge: "فروغ تعلیم" },
+  ];
+
   return (
     <div className="min-h-screen bg-[#f0f2f5] text-slate-800 flex font-sans">
       {/* 1. DESKTOP LEFT SIDEBAR (bg-[#1e3a5f] Dark Blue Theme) */}
@@ -1329,6 +1337,34 @@ export default function Home() {
               );
             })}
           </nav>
+
+          {/* NEW PARENT MENU: فنڈز / Funds */}
+          <div className="pt-3.5 border-t border-blue-900/60">
+            <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-rose-300 mb-1.5 flex items-center gap-1.5 font-urdu">
+              <Coins className="w-3.5 h-3.5 text-rose-300" />
+              <span>فنڈز / Funds</span>
+            </p>
+            <nav className="space-y-1">
+              {fundsNav.map((fund) => {
+                const Icon = fund.icon;
+                return (
+                  <Link
+                    key={fund.href}
+                    href={fund.href}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-slate-200 hover:bg-[#2c4d75]/70 hover:text-white transition-colors group"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Icon className="w-3.5 h-3.5 text-rose-300 group-hover:text-yellow-400" />
+                      <span className="font-urdu text-[13px]">{fund.label}</span>
+                    </div>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                      {fund.badge}
+                    </span>
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
 
           {/* SAAS MODULES IN SIDEBAR */}
           <div className="pt-3.5 border-t border-blue-900/60">
@@ -1450,6 +1486,35 @@ export default function Home() {
                   );
                 })}
               </nav>
+
+              {/* Mobile Drawer Govt Funds */}
+              <div className="pt-3.5 border-t border-blue-900/60">
+                <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-rose-300 mb-1.5 flex items-center gap-1.5 font-urdu">
+                  <Coins className="w-3.5 h-3.5 text-rose-300" />
+                  <span>فنڈز / Funds</span>
+                </p>
+                <nav className="space-y-1">
+                  {fundsNav.map((fund) => {
+                    const Icon = fund.icon;
+                    return (
+                      <Link
+                        key={fund.href}
+                        href={fund.href}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold text-slate-200 hover:bg-[#2c4d75]/70 hover:text-white transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Icon className="w-3.5 h-3.5 text-rose-300" />
+                          <span className="font-urdu text-[13px]">{fund.label}</span>
+                        </div>
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                          {fund.badge}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </nav>
+              </div>
 
               {/* Mobile Drawer SaaS Modules */}
               <div className="pt-3.5 border-t border-blue-900/60">
@@ -1820,6 +1885,71 @@ export default function Home() {
                       </p>
                     </div>
                   </Link>
+                </div>
+
+                {/* GOVT FUNDS REGISTERS (NSB & FTF) QUICK LAUNCH */}
+                <div className="mt-4 pt-3.5 border-t border-slate-200">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                      <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5 font-urdu">
+                        <Coins className="w-3.5 h-3.5 text-rose-600" />
+                        <span>سرکاری فنڈز رجسٹرز (Govt Funds Registers)</span>
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-200">
+                        SED / PEF Format
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-medium text-slate-400 hidden sm:block">
+                      فارم 8 کیش بک و فروغِ تعلیم فنڈ رجسٹر
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Link
+                      href="/nsb"
+                      className="p-3 rounded-xl border border-rose-100 bg-rose-50/40 hover:bg-rose-50 hover:border-rose-300 transition-all group flex items-start gap-3 shadow-2xs"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                        <Book className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-xs font-bold text-slate-900 group-hover:text-rose-700 truncate font-urdu">
+                            NSB کیش بک (سکول کونسل - فارم نمبر 8)
+                          </h4>
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-800">
+                            A4 Landscape
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
+                          آمدن، اخراجات، 8-باکس ایمس کوڈ، بینک بیلنس و کیش ان ہینڈ
+                        </p>
+                      </div>
+                    </Link>
+
+                    <Link
+                      href="/ftf"
+                      className="p-3 rounded-xl border border-amber-100 bg-amber-50/40 hover:bg-amber-50 hover:border-amber-300 transition-all group flex items-start gap-3 shadow-2xs"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-amber-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                        <Coins className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-xs font-bold text-slate-900 group-hover:text-amber-700 truncate font-urdu">
+                            FTF رجسٹر (فروغِ تعلیم فنڈ گورنمنٹ)
+                          </h4>
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">
+                            A4 Portrait
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
+                          جماعت 1 تا 10 طلباء فیس وصولی، FTF اخراجات و سرکاری حساب
+                        </p>
+                      </div>
+                    </Link>
+                  </div>
                 </div>
               </div>
 
