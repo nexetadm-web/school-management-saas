@@ -241,15 +241,88 @@ export const SUBJECT_CATEGORIES = [
   "Languages",
 ] as const;
 
+export const STANDARD_SCHOOL_CLASSES = [
+  "PG",
+  "Nursery",
+  "Prep",
+  "Class 1",
+  "Class 2",
+  "Class 3",
+  "Class 4",
+  "Class 5",
+  "Class 6",
+  "Class 7",
+  "Class 8",
+  "Class 9",
+  "Class 10",
+] as const;
+
+// Default class-to-subject assignment in Pakistani schools
+export const DEFAULT_CLASS_SUBJECT_MAP: Record<string, string[]> = {
+  // Early Childhood / Pre-Primary: 3-4 basic courses
+  "PG": ["English", "Urdu", "Mathematics"],
+  "Play": ["English", "Urdu", "Mathematics"],
+  "Nursery": ["English", "Urdu", "Mathematics", "General Science"],
+  "Prep": ["English", "Urdu", "Mathematics", "General Science", "Islamiat Compulsory"],
+  "KG": ["English", "Urdu", "Mathematics", "General Science", "Islamiat Compulsory"],
+
+  // Primary School (Class 1 to 5): 5-7 courses
+  "Class 1": ["English", "Urdu", "Mathematics", "General Science", "Islamiat Compulsory"],
+  "1st": ["English", "Urdu", "Mathematics", "General Science", "Islamiat Compulsory"],
+  "Class 2": ["English", "Urdu", "Mathematics", "General Science", "Islamiat Compulsory"],
+  "2nd": ["English", "Urdu", "Mathematics", "General Science", "Islamiat Compulsory"],
+  "Class 3": ["English", "Urdu", "Mathematics", "General Science", "Islamiat Compulsory", "Computer Science"],
+  "3rd": ["English", "Urdu", "Mathematics", "General Science", "Islamiat Compulsory", "Computer Science"],
+  "Class 4": ["English", "Urdu", "Mathematics", "General Science", "Islamiat Compulsory", "Computer Science", "Quran Translation"],
+  "4th": ["English", "Urdu", "Mathematics", "General Science", "Islamiat Compulsory", "Computer Science", "Quran Translation"],
+  "Class 5": ["English", "Urdu", "Mathematics", "General Science", "Islamiat Compulsory", "Computer Science", "Quran Translation"],
+  "5th": ["English", "Urdu", "Mathematics", "General Science", "Islamiat Compulsory", "Computer Science", "Quran Translation"],
+
+  // Middle School (Class 6 to 8): 7-8 courses
+  "Class 6": ["English", "Urdu", "Mathematics", "General Science", "Islamiat Compulsory", "Pakistan Studies", "Quran Translation", "Computer Science"],
+  "6th": ["English", "Urdu", "Mathematics", "General Science", "Islamiat Compulsory", "Pakistan Studies", "Quran Translation", "Computer Science"],
+  "Class 7": ["English", "Urdu", "Mathematics", "General Science", "Islamiat Compulsory", "Pakistan Studies", "Quran Translation", "Computer Science"],
+  "7th": ["English", "Urdu", "Mathematics", "General Science", "Islamiat Compulsory", "Pakistan Studies", "Quran Translation", "Computer Science"],
+  "Class 8": ["English", "Urdu", "Mathematics", "General Science", "Islamiat Compulsory", "Pakistan Studies", "Quran Translation", "Computer Science"],
+  "8th": ["English", "Urdu", "Mathematics", "General Science", "Islamiat Compulsory", "Pakistan Studies", "Quran Translation", "Computer Science"],
+
+  // Matric Secondary School (Class 9 & 10 Science Group): 8-9 courses
+  "Class 9": ["English", "Urdu", "Mathematics", "Physics", "Chemistry", "Biology", "Computer Science", "Islamiat Compulsory", "Quran Translation"],
+  "9th": ["English", "Urdu", "Mathematics", "Physics", "Chemistry", "Biology", "Computer Science", "Islamiat Compulsory", "Quran Translation"],
+  "Class 10": ["English", "Urdu", "Mathematics", "Physics", "Chemistry", "Biology", "Computer Science", "Pakistan Studies", "Quran Translation"],
+  "10th": ["English", "Urdu", "Mathematics", "Physics", "Chemistry", "Biology", "Computer Science", "Pakistan Studies", "Quran Translation"],
+};
+
+export function normalizeClassName(className: string): string {
+  if (!className) return "Class 1";
+  const trimmed = className.trim();
+  const lower = trimmed.toLowerCase();
+  if (lower === "pg" || lower === "play") return "PG";
+  if (lower === "nursery") return "Nursery";
+  if (lower === "prep" || lower === "kg") return "Prep";
+  const numMatch = trimmed.match(/\d+/);
+  if (numMatch) {
+    return `Class ${numMatch[0]}`;
+  }
+  return trimmed;
+}
+
+export function getDefaultAssignedSubjectNames(className: string): string[] {
+  const norm = normalizeClassName(className);
+  return (
+    DEFAULT_CLASS_SUBJECT_MAP[norm] ||
+    DEFAULT_CLASS_SUBJECT_MAP[className] ||
+    DEFAULT_CLASS_SUBJECT_MAP["Class 1"] ||
+    ["English", "Urdu", "Mathematics", "General Science", "Islamiat Compulsory"]
+  );
+}
+
 export function getAllBoardSubjects(): SubjectItem[] {
   return [...PAKISTAN_BOARD_SUBJECTS];
 }
 
 export function getSubjectsForClass(classStr?: string): SubjectItem[] {
   if (!classStr) return [...PAKISTAN_BOARD_SUBJECTS];
-  const normalized = classStr.trim().toLowerCase();
-  return PAKISTAN_BOARD_SUBJECTS.filter((sub) => {
-    if (!sub.classes || sub.classes.length === 0) return true;
-    return sub.classes.some((c) => c.toLowerCase() === normalized);
-  });
+  const assignedNames = getDefaultAssignedSubjectNames(classStr);
+  return PAKISTAN_BOARD_SUBJECTS.filter((sub) => assignedNames.includes(sub.name));
 }

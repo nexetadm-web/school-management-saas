@@ -31,6 +31,7 @@ import {
   CreditCard,
   ChevronRight,
   MoveHorizontal,
+  BookOpen,
 } from "lucide-react";
 
 interface Student {
@@ -51,7 +52,11 @@ interface Exam {
   school_id?: number | string;
 }
 
-import { PAKISTAN_BOARD_SUBJECTS } from "@/lib/subjects-data";
+import {
+  PAKISTAN_BOARD_SUBJECTS,
+  getDefaultAssignedSubjectNames,
+  normalizeClassName,
+} from "@/lib/subjects-data";
 
 interface Subject {
   id: number | string;
@@ -171,6 +176,33 @@ export default function ExamsAndReportCardPage() {
         if (subList.length > 0) {
           setSubjects(subList);
         }
+
+        // 4. Sync class_subjects assignments from Supabase if available
+        try {
+          let csQuery = supabase.from("class_subjects").select("class_name, subject_id");
+          if (ctx.schoolId) {
+            csQuery = csQuery.or(`school_id.eq.${ctx.schoolId},school_id.is.null`);
+          }
+          const { data: dbClassSubs } = await csQuery;
+          if (dbClassSubs && dbClassSubs.length > 0) {
+            const classMap: Record<string, string[]> = {};
+            dbClassSubs.forEach((item: any) => {
+              const subObj = subList.find((s) => String(s.id) === String(item.subject_id));
+              if (subObj) {
+                if (!classMap[item.class_name]) classMap[item.class_name] = [];
+                if (!classMap[item.class_name].includes(subObj.name)) {
+                  classMap[item.class_name].push(subObj.name);
+                }
+              }
+            });
+            if (Object.keys(classMap).length > 0 && typeof window !== "undefined") {
+              localStorage.setItem(
+                `oa_class_subjects_${ctx.schoolId || "all"}`,
+                JSON.stringify(classMap)
+              );
+            }
+          }
+        } catch (csErr) {}
       } catch (subErr) {}
 
       loadSavedMarks(loadedExams[0]?.id || "1", ctx.schoolId);
@@ -222,6 +254,29 @@ export default function ExamsAndReportCardPage() {
     return Array.from(set).sort();
   }, [students]);
 
+  // Filter subjects strictly to those assigned to the current selected class
+  const classActiveSubjects = useMemo(() => {
+    // 1. Check custom class_subjects assignments in localStorage / DB
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem(`oa_class_subjects_${schoolContext?.schoolId || "all"}`);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          const assignedNames = parsed[selectedClass] || parsed[normalizeClassName(selectedClass)];
+          if (Array.isArray(assignedNames) && assignedNames.length > 0) {
+            const filtered = subjects.filter((s) => assignedNames.includes(s.name));
+            if (filtered.length > 0) return filtered;
+          }
+        } catch (e) {}
+      }
+    }
+
+    // 2. Default standard Pakistan Board mapping per class
+    const defaultNames = getDefaultAssignedSubjectNames(selectedClass);
+    const filtered = subjects.filter((s) => defaultNames.includes(s.name));
+    return filtered.length > 0 ? filtered : subjects.slice(0, 6);
+  }, [subjects, selectedClass, schoolContext]);
+
   const handleMarkChange = (studentId: string | number, subjectId: string | number, val: string) => {
     const num = Math.min(100, Math.max(0, parseFloat(val) || 0));
     setMarksMap((prev) => ({
@@ -241,7 +296,7 @@ export default function ExamsAndReportCardPage() {
       try {
         const rows: any[] = [];
         classStudents.forEach((st) => {
-          subjects.forEach((sub) => {
+          classActiveSubjects.forEach((sub) => {
             const obtained = marksMap[`${st.id}_${sub.id}`] ?? 0;
             rows.push({
               school_id: schoolContext?.schoolId === "all" ? 1 : schoolContext?.schoolId,
@@ -294,7 +349,7 @@ export default function ExamsAndReportCardPage() {
     let maxTotal = 0;
     const subjectBreakdown: Array<{ name: string; total: number; obtained: number; grade: string }> = [];
 
-    subjects.forEach((sub) => {
+    classActiveSubjects.forEach((sub) => {
       const score = marksMap[`${studentId}_${sub.id}`] ?? 0;
       obtainedTotal += score;
       maxTotal += sub.total_marks;
@@ -347,7 +402,7 @@ export default function ExamsAndReportCardPage() {
       ...item,
       position: idx + 1,
     }));
-  }, [classStudents, marksMap, subjects]);
+  }, [classStudents, marksMap, classActiveSubjects]);
 
   const currentExamObj = exams.find((e) => String(e.id) === String(selectedExamId));
   const schoolTitle = schoolContext?.schoolName || "OA SMART SCHOOL SYSTEM";
@@ -412,6 +467,15 @@ export default function ExamsAndReportCardPage() {
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <Link
+              href="/class-subjects"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-2xs transition cursor-pointer"
+              title="Assign subjects per class"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Class Subjects</span>
+            </Link>
+
             <button
               onClick={() => {
                 setActiveTab("reports");
@@ -602,10 +666,10 @@ export default function ExamsAndReportCardPage() {
                       <th className="py-2.5 px-3 w-40 sticky left-12 bg-slate-50 z-10 shadow-r">
                         Student Name
                       </th>
-                      {subjects.map((sub) => (
+                      {classActiveSubjects.map((sub) => (
                         <th key={sub.id} className="py-2.5 px-2 text-center min-w-[85px]">
                           {sub.name}
-                          <span className="block text-[9px] text-slate-400 font-normal">/100</span>
+                          <span className="block text-[9px] text-slate-400 font-normal">/{sub.total_marks}</span>
                         </th>
                       ))}
                       <th className="py-2.5 px-3 text-center font-black text-slate-700">Total</th>
@@ -617,7 +681,7 @@ export default function ExamsAndReportCardPage() {
                   <tbody className="divide-y divide-slate-100">
                     {classStudents.length === 0 ? (
                       <tr>
-                        <td colSpan={subjects.length + 6} className="py-12 text-center text-slate-400">
+                        <td colSpan={classActiveSubjects.length + 6} className="py-12 text-center text-slate-400">
                           No students enrolled in Class {selectedClass}.
                         </td>
                       </tr>
@@ -641,7 +705,7 @@ export default function ExamsAndReportCardPage() {
                             </td>
 
                             {/* Subject Marks Input Cells */}
-                            {subjects.map((sub) => {
+                            {classActiveSubjects.map((sub) => {
                               const val = marksMap[`${st.id}_${sub.id}`] ?? "";
 
                               return (
@@ -649,7 +713,7 @@ export default function ExamsAndReportCardPage() {
                                   <input
                                     type="number"
                                     min={0}
-                                    max={100}
+                                    max={sub.total_marks}
                                     value={val}
                                     onChange={(e) => handleMarkChange(st.id, sub.id, e.target.value)}
                                     className="w-16 px-1.5 py-1 text-center font-bold text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:bg-white focus:border-indigo-500"
@@ -733,7 +797,7 @@ export default function ExamsAndReportCardPage() {
 
                       {/* Subject Inputs Grid */}
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {subjects.map((sub) => {
+                        {classActiveSubjects.map((sub) => {
                           const val = marksMap[`${st.id}_${sub.id}`] ?? "";
 
                           return (

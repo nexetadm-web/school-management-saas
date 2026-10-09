@@ -1283,7 +1283,7 @@ export default function Home() {
     { href: "/attendance-report", label: "Attendance Report", icon: BarChart3, badge: "Calendar" },
     { href: "/admissions", label: "Online Admissions", icon: FileCheck, badge: "Desk" },
     { href: "/homework", label: "Daily Homework", icon: BookOpen, badge: "Diary" },
-    { href: "/subjects", label: "Board Subjects", icon: BookMarked, badge: "Curriculum" },
+    { href: "/class-subjects", label: "Class Subjects", icon: BookMarked, badge: "Assign" },
   ];
 
   return (
@@ -1817,23 +1817,6 @@ export default function Home() {
                       </h3>
                       <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
                         Daily diary with WhatsApp broadcast
-                      </p>
-                    </div>
-                  </Link>
-
-                  <Link
-                    href="/subjects"
-                    className="p-3.5 rounded-xl border border-indigo-100 bg-indigo-50/40 hover:bg-indigo-50 hover:border-indigo-300 transition-all group flex items-start gap-3 shadow-2xs"
-                  >
-                    <div className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
-                      <BookMarked className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="text-xs font-bold text-slate-900 group-hover:text-indigo-700 truncate">
-                        Board Subjects
-                      </h3>
-                      <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
-                        21 Pakistan Matric courses & CRUD
                       </p>
                     </div>
                   </Link>
