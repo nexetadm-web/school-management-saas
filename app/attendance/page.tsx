@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { resolveActiveSchoolContext } from "@/lib/school-context";
-import { getTodayPKDate } from "@/lib/date-utils";
+import { getTodayPKDate, formatPKWhatsAppPhone } from "@/lib/date-utils";
 import {
   ArrowLeft,
   Calendar,
@@ -25,6 +25,7 @@ import {
   User,
   Menu,
   X,
+  MessageCircle,
 } from "lucide-react";
 
 interface Student {
@@ -192,6 +193,14 @@ export default function AttendancePage() {
     const rate = total > 0 ? ((present / total) * 100).toFixed(1) : "0.0";
 
     return { total, present, absent, leave, rate };
+  }, [filteredStudents, attendanceMap]);
+
+  const [isAbsentWhatsAppModalOpen, setIsAbsentWhatsAppModalOpen] = useState(false);
+
+  const absentStudents = useMemo(() => {
+    return filteredStudents.filter(
+      (s) => (attendanceMap[String(s.id)] || "Present") === "Absent"
+    );
   }, [filteredStudents, attendanceMap]);
 
   // Save Attendance Handler
@@ -388,6 +397,17 @@ export default function AttendancePage() {
               >
                 All Leave
               </button>
+
+              {absentStudents.length > 0 && (
+                <button
+                  onClick={() => setIsAbsentWhatsAppModalOpen(true)}
+                  className="flex-1 lg:flex-initial px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5"
+                  title="غیر حاضر طلباء کے والدین کو واٹس ایپ الرٹ بھیجیں"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  <span>WhatsApp Absent ({absentStudents.length})</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -455,8 +475,22 @@ export default function AttendancePage() {
                       </div>
                     </div>
 
-                    {/* 3 Large Touch-Friendly Buttons: P / A / L (Min 44px for Apple/Android standard) */}
+                    {/* 3 Large Touch-Friendly Buttons: P / A / L + WhatsApp Alert */}
                     <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                      {status === "Absent" && st.phone && (
+                        <a
+                          href={`https://wa.me/${formatPKWhatsAppPhone(st.phone)}?text=${encodeURIComponent(
+                            `محترم والدین، آپ کا بچہ/بچی ${st.name} (کلاس ${st.class}) آج بتاریخ ${attendanceDate} سکول سے غیر حاضر ہے۔ برائے مہربانی سکول کو مطلع فرمائیں۔ شکریہ - ${schoolContext?.schoolName || "OA Smart School"}`
+                          )}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl font-bold text-xs flex items-center justify-center bg-emerald-500 hover:bg-emerald-600 text-white shadow-xs transition"
+                          title="والدین کو واٹس ایپ الرٹ بھیجیں"
+                        >
+                          <MessageCircle className="w-5 h-5" />
+                        </a>
+                      )}
+
                       {/* P - Present */}
                       <button
                         onClick={() => handleSetStatus(st.id, "Present")}
@@ -554,6 +588,83 @@ export default function AttendancePage() {
           </button>
         </div>
       </footer>
+
+      {/* WHATSAPP ABSENT ALERT MODAL */}
+      {isAbsentWhatsAppModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in" dir="rtl">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-4 bg-emerald-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="w-5 h-5 text-emerald-200" />
+                <div>
+                  <h3 className="text-sm font-black font-urdu">
+                    غیر حاضر طلباء کے والدین کو واٹس ایپ الرٹ
+                  </h3>
+                  <p className="text-[10px] text-emerald-100">
+                    تاریخ: {attendanceDate} • کل {absentStudents.length} طلباء غیر حاضر ہیں
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAbsentWhatsAppModalOpen(false)}
+                className="p-1 rounded-lg hover:bg-white/20 text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3 text-xs">
+              <p className="text-slate-600 font-medium">
+                ہر طالب علم کے والدین کو سنگل کلک پر خودکار پیغام ارسال کریں:
+              </p>
+
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+                {absentStudents.map((st) => {
+                  const phone = formatPKWhatsAppPhone(st.phone);
+                  const msg = `محترم والدین، آپ کا بچہ/بچی ${st.name} (کلاس ${st.class}) آج بتاریخ ${attendanceDate} سکول سے غیر حاضر ہے۔ برائے مہربانی سکول کو غیر حاضری کی وجہ سے مطلع فرمائیں۔ شکریہ - ${schoolContext?.schoolName || "OA Smart School"}`;
+
+                  return (
+                    <div
+                      key={st.id}
+                      className="p-2.5 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between"
+                    >
+                      <div>
+                        <h4 className="font-bold text-slate-900">{st.name}</h4>
+                        <p className="text-[10px] text-slate-500 font-mono">
+                          والد: {st.father_name || "N/A"} • فون: {st.phone || "کوئی فون درج نہیں"}
+                        </p>
+                      </div>
+
+                      {phone ? (
+                        <a
+                          href={`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-1 shadow-xs transition"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          <span>بھیجیں</span>
+                        </a>
+                      ) : (
+                        <span className="text-[10px] text-slate-400">فون نہیں ہے</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  onClick={() => setIsAbsentWhatsAppModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold cursor-pointer"
+                >
+                  بند کریں
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

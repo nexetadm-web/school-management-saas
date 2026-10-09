@@ -49,6 +49,8 @@ import {
   BookMarked,
   Book,
   Coins,
+  Package,
+  Bus,
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import {
@@ -1275,8 +1277,13 @@ export default function Home() {
     { id: "expenses", label: "Accounting & Expenses", icon: Receipt },
   ];
 
-  // SAAS MODULES (ALL 9 MODULES)
+  // SAAS MODULES (ALL POWER MODULES)
   const saasToolsNav = [
+    { href: "/stock", label: "سٹور / سٹاک (Stock)", icon: Package, badge: "Store" },
+    { href: "/certificates", label: "اسناد (Certificates)", icon: Award, badge: "A4 Print" },
+    { href: "/timetable", label: "ٹائم ٹیبل (Timetable)", icon: Calendar, badge: "8x6 Grid" },
+    { href: "/transport", label: "ٹرانسپورٹ (Transport)", icon: Bus, badge: "Fleet" },
+    { href: "/library", label: "لائبریری (Library)", icon: BookOpen, badge: "Catalog" },
     { href: "/fees-reminder", label: "WhatsApp Reminders", icon: MessageCircle, badge: "Notice" },
     { href: "/fee-challan", label: "Bank Fee Challan", icon: FileText, badge: "3-Part PDF" },
     { href: "/id-cards", label: "ID Card Generator", icon: CreditCard, badge: "Print A4" },
@@ -1729,8 +1736,157 @@ export default function Home() {
           {/* 4. MAIN DASHBOARD TAB */}
           {activeTab === "dashboard" && (
             <div className="space-y-6">
-              {/* 4 KILLER SAAS MODULES LAUNCHER */}
-              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs space-y-3">
+              {/* 8 BIG VIBRANT COLORFUL CARDS (TOP OF DASHBOARD - WITH SHADOW-XL ROUNDED-2XL) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
+                {/* Card 1: Unpaid Fees (Red bg-[#e74c3c]) */}
+                <div className="bg-[#e74c3c] rounded-2xl p-4 sm:p-5 text-white shadow-xl relative overflow-hidden flex flex-col justify-between group hover:shadow-2xl hover:scale-[1.01] transition-all">
+                  <CreditCard className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
+                  <div>
+                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
+                      {pendingFeeCount} Unpaid
+                    </h3>
+                    <p className="text-xs sm:text-sm font-medium opacity-90 text-white">
+                      Rs. {unpaidFeeDue.toLocaleString()} Due
+                    </p>
+                  </div>
+                  <div
+                    onClick={() => setActiveTab("fees")}
+                    className="bg-black/15 -mx-4 -mb-4 sm:-mx-5 sm:-mb-5 mt-4 px-4 py-2 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
+                  >
+                    <span>More info</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+
+                {/* Card 2: Total Income This Year (Light Blue bg-[#00a8e8]) */}
+                <div className="bg-[#00a8e8] rounded-2xl p-4 sm:p-5 text-white shadow-xl relative overflow-hidden flex flex-col justify-between group hover:shadow-2xl hover:scale-[1.01] transition-all">
+                  <DollarSign className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
+                  <div>
+                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
+                      Rs. {totalIncomeThisYear.toLocaleString()}
+                    </h3>
+                    <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Total Income This Year</p>
+                  </div>
+                  <div
+                    onClick={() => setActiveTab("fees")}
+                    className="bg-black/15 -mx-4 -mb-4 sm:-mx-5 sm:-mb-5 mt-4 px-4 py-2 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
+                  >
+                    <span>More info</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+
+                {/* Card 3: Income This Month (Green bg-[#27ae60]) */}
+                <div className="bg-[#27ae60] rounded-2xl p-4 sm:p-5 text-white shadow-xl relative overflow-hidden flex flex-col justify-between group hover:shadow-2xl hover:scale-[1.01] transition-all">
+                  <BarChart3 className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
+                  <div>
+                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
+                      Rs. {totalIncomeThisMonth.toLocaleString()}
+                    </h3>
+                    <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Income This Month</p>
+                  </div>
+                  <div
+                    onClick={() => setActiveTab("fees")}
+                    className="bg-black/15 -mx-4 -mb-4 sm:-mx-5 sm:-mb-5 mt-4 px-4 py-2 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
+                  >
+                    <span>More info</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+
+                {/* Card 4: Income Today (Dark Blue bg-[#2471a3]) */}
+                <div className="bg-[#2471a3] rounded-2xl p-4 sm:p-5 text-white shadow-xl relative overflow-hidden flex flex-col justify-between group hover:shadow-2xl hover:scale-[1.01] transition-all">
+                  <PieChart className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
+                  <div>
+                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
+                      Rs. {incomeToday.toLocaleString()}
+                    </h3>
+                    <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Income Today</p>
+                  </div>
+                  <div
+                    onClick={() => setActiveTab("fees")}
+                    className="bg-black/15 -mx-4 -mb-4 sm:-mx-5 sm:-mb-5 mt-4 px-4 py-2 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
+                  >
+                    <span>More info</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+
+                {/* Card 5: Profit This Month (Green bg-[#27ae60]) */}
+                <div className="bg-[#27ae60] rounded-2xl p-4 sm:p-5 text-white shadow-xl relative overflow-hidden flex flex-col justify-between group hover:shadow-2xl hover:scale-[1.01] transition-all">
+                  <Activity className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
+                  <div>
+                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
+                      Rs. {netProfitThisMonth.toLocaleString()}
+                    </h3>
+                    <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Profit This Month</p>
+                  </div>
+                  <div
+                    onClick={() => setActiveTab("expenses")}
+                    className="bg-black/15 -mx-4 -mb-4 sm:-mx-5 sm:-mb-5 mt-4 px-4 py-2 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
+                  >
+                    <span>More info</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+
+                {/* Card 6: Total Expense This Year (Reddish Brown bg-[#c0392b]) */}
+                <div className="bg-[#c0392b] rounded-2xl p-4 sm:p-5 text-white shadow-xl relative overflow-hidden flex flex-col justify-between group hover:shadow-2xl hover:scale-[1.01] transition-all">
+                  <TrendingUp className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
+                  <div>
+                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
+                      Rs. {totalExpenseThisYear.toLocaleString()}
+                    </h3>
+                    <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Total Expense This Year</p>
+                  </div>
+                  <div
+                    onClick={() => setActiveTab("expenses")}
+                    className="bg-black/15 -mx-4 -mb-4 sm:-mx-5 sm:-mb-5 mt-4 px-4 py-2 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
+                  >
+                    <span>More info</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+
+                {/* Card 7: Expense This Month (Orange bg-[#f39c12]) */}
+                <div className="bg-[#f39c12] rounded-2xl p-4 sm:p-5 text-white shadow-xl relative overflow-hidden flex flex-col justify-between group hover:shadow-2xl hover:scale-[1.01] transition-all">
+                  <Info className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
+                  <div>
+                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
+                      Rs. {totalExpenseThisMonth.toLocaleString()}
+                    </h3>
+                    <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Expense This Month</p>
+                  </div>
+                  <div
+                    onClick={() => setActiveTab("expenses")}
+                    className="bg-black/15 -mx-4 -mb-4 sm:-mx-5 sm:-mb-5 mt-4 px-4 py-2 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
+                  >
+                    <span>More info</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+
+                {/* Card 8: Expense Today (Light Blue bg-[#00a8e8]) */}
+                <div className="bg-[#00a8e8] rounded-2xl p-4 sm:p-5 text-white shadow-xl relative overflow-hidden flex flex-col justify-between group hover:shadow-2xl hover:scale-[1.01] transition-all">
+                  <ShoppingBag className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
+                  <div>
+                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
+                      Rs. {expenseToday.toLocaleString()}
+                    </h3>
+                    <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Expense Today</p>
+                  </div>
+                  <div
+                    onClick={() => setActiveTab("expenses")}
+                    className="bg-black/15 -mx-4 -mb-4 sm:-mx-5 sm:-mb-5 mt-4 px-4 py-2 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
+                  >
+                    <span>More info</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+              </div>
+
+              {/* BOTTOM: SMALL WHITE FUNCTION CARDS - TITLED "NEXETA SCHOOL SAAS POWER TOOLS" */}
+              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-sm space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -1741,7 +1897,7 @@ export default function Home() {
                       </span>
                     </h2>
                     <p className="text-xs text-slate-500">
-                      Automated fee recovery notices, student ID generation, academic report cards, and daily attendance
+                      Automated fee recovery notices, student ID generation, academic report cards, daily attendance & stock inventory
                     </p>
                   </div>
                   <span className="text-[11px] font-bold text-slate-400 hidden sm:block">
@@ -1813,7 +1969,7 @@ export default function Home() {
                         Exams & Report Cards
                       </h3>
                       <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
-                        Marks matrix & printable PDF cards
+                        Marks matrix & printable report card
                       </p>
                     </div>
                   </Link>
@@ -1830,7 +1986,7 @@ export default function Home() {
                         Daily Attendance
                       </h3>
                       <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
-                        1-click P / A / L touch-friendly marking
+                        1-click P / A / L & WhatsApp alert
                       </p>
                     </div>
                   </Link>
@@ -1887,25 +2043,25 @@ export default function Home() {
                   </Link>
                 </div>
 
-                {/* GOVT FUNDS REGISTERS (NSB & FTF) QUICK LAUNCH */}
+                {/* GOVT FUNDS & STOCK REGISTERS QUICK LAUNCH */}
                 <div className="mt-4 pt-3.5 border-t border-slate-200">
                   <div className="flex items-center justify-between mb-2.5">
                     <div className="flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
                       <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5 font-urdu">
                         <Coins className="w-3.5 h-3.5 text-rose-600" />
-                        <span>سرکاری فنڈز رجسٹرز (Govt Funds Registers)</span>
+                        <span>سرکاری فنڈز و سٹاک انوینٹری (Govt Registers & Stock)</span>
                       </h3>
                       <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-200">
                         SED / PEF Format
                       </span>
                     </div>
                     <span className="text-[10px] font-medium text-slate-400 hidden sm:block">
-                      فارم 8 کیش بک و فروغِ تعلیم فنڈ رجسٹر
+                      فارم 8 کیش بک، فروغِ تعلیم فنڈ و سکول سٹور
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <Link
                       href="/nsb"
                       className="p-3 rounded-xl border border-rose-100 bg-rose-50/40 hover:bg-rose-50 hover:border-rose-300 transition-all group flex items-start gap-3 shadow-2xs"
@@ -1916,14 +2072,14 @@ export default function Home() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <h4 className="text-xs font-bold text-slate-900 group-hover:text-rose-700 truncate font-urdu">
-                            NSB کیش بک (سکول کونسل - فارم نمبر 8)
+                            NSB کیش بک (فارم 8)
                           </h4>
                           <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-800">
                             A4 Landscape
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
-                          آمدن، اخراجات، 8-باکس ایمس کوڈ، بینک بیلنس و کیش ان ہینڈ
+                          آمدن، اخراجات، 8-باکس ایمس کوڈ و بیلنس
                         </p>
                       </div>
                     </Link>
@@ -1938,166 +2094,39 @@ export default function Home() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <h4 className="text-xs font-bold text-slate-900 group-hover:text-amber-700 truncate font-urdu">
-                            FTF رجسٹر (فروغِ تعلیم فنڈ گورنمنٹ)
+                            FTF رجسٹر (فروغِ تعلیم فنڈ)
                           </h4>
                           <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">
                             A4 Portrait
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
-                          جماعت 1 تا 10 طلباء فیس وصولی، FTF اخراجات و سرکاری حساب
+                          جماعت 1 تا 10 طلباء فیس و FTF اخراجات
                         </p>
                       </div>
                     </Link>
-                  </div>
-                </div>
-              </div>
 
-              {/* 8 VIBRANT COLORFUL CARDS WITH REAL DATA OR ZERO */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
-                {/* Card 1: Unpaid Fees (Red bg-[#e74c3c]) */}
-                <div className="bg-[#e74c3c] rounded-lg p-3 text-white shadow-md relative overflow-hidden flex flex-col justify-between group">
-                  <CreditCard className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
-                  <div>
-                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
-                      {pendingFeeCount} Unpaid
-                    </h3>
-                    <p className="text-xs sm:text-sm font-medium opacity-90 text-white">
-                      Rs. {unpaidFeeDue.toLocaleString()} Due
-                    </p>
-                  </div>
-                  <div
-                    onClick={() => setActiveTab("fees")}
-                    className="bg-black/15 -mx-3 -mb-3 mt-3 px-3 py-1 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
-                  >
-                    <span>More info</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-
-                {/* Card 2: Total Income This Year (Light Blue bg-[#00a8e8]) */}
-                <div className="bg-[#00a8e8] rounded-lg p-3 text-white shadow-md relative overflow-hidden flex flex-col justify-between group">
-                  <DollarSign className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
-                  <div>
-                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
-                      Rs. {totalIncomeThisYear.toLocaleString()}
-                    </h3>
-                    <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Total Income This Year</p>
-                  </div>
-                  <div
-                    onClick={() => setActiveTab("fees")}
-                    className="bg-black/15 -mx-3 -mb-3 mt-3 px-3 py-1 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
-                  >
-                    <span>More info</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-
-                {/* Card 3: Income This Month (Green bg-[#27ae60]) */}
-                <div className="bg-[#27ae60] rounded-lg p-3 text-white shadow-md relative overflow-hidden flex flex-col justify-between group">
-                  <BarChart3 className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
-                  <div>
-                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
-                      Rs. {totalIncomeThisMonth.toLocaleString()}
-                    </h3>
-                    <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Income This Month</p>
-                  </div>
-                  <div
-                    onClick={() => setActiveTab("fees")}
-                    className="bg-black/15 -mx-3 -mb-3 mt-3 px-3 py-1 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
-                  >
-                    <span>More info</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-
-                {/* Card 4: Income Today (Dark Blue bg-[#2471a3]) */}
-                <div className="bg-[#2471a3] rounded-lg p-3 text-white shadow-md relative overflow-hidden flex flex-col justify-between group">
-                  <PieChart className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
-                  <div>
-                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
-                      Rs. {incomeToday.toLocaleString()}
-                    </h3>
-                    <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Income Today</p>
-                  </div>
-                  <div
-                    onClick={() => setActiveTab("fees")}
-                    className="bg-black/15 -mx-3 -mb-3 mt-3 px-3 py-1 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
-                  >
-                    <span>More info</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-
-                {/* Card 5: Profit This Month (Green bg-[#27ae60]) */}
-                <div className="bg-[#27ae60] rounded-lg p-3 text-white shadow-md relative overflow-hidden flex flex-col justify-between group">
-                  <Activity className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
-                  <div>
-                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
-                      Rs. {netProfitThisMonth.toLocaleString()}
-                    </h3>
-                    <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Profit This Month</p>
-                  </div>
-                  <div
-                    onClick={() => setActiveTab("expenses")}
-                    className="bg-black/15 -mx-3 -mb-3 mt-3 px-3 py-1 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
-                  >
-                    <span>More info</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-
-                {/* Card 6: Total Expense This Year (Reddish Brown bg-[#c0392b]) */}
-                <div className="bg-[#c0392b] rounded-lg p-3 text-white shadow-md relative overflow-hidden flex flex-col justify-between group">
-                  <TrendingUp className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
-                  <div>
-                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
-                      Rs. {totalExpenseThisYear.toLocaleString()}
-                    </h3>
-                    <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Total Expense This Year</p>
-                  </div>
-                  <div
-                    onClick={() => setActiveTab("expenses")}
-                    className="bg-black/15 -mx-3 -mb-3 mt-3 px-3 py-1 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
-                  >
-                    <span>More info</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-
-                {/* Card 7: Expense This Month (Orange bg-[#f39c12]) */}
-                <div className="bg-[#f39c12] rounded-lg p-3 text-white shadow-lg relative overflow-hidden flex flex-col justify-between group">
-                  <Info className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
-                  <div>
-                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
-                      Rs. {totalExpenseThisMonth.toLocaleString()}
-                    </h3>
-                    <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Expense This Month</p>
-                  </div>
-                  <div
-                    onClick={() => setActiveTab("expenses")}
-                    className="bg-black/15 -mx-3 -mb-3 mt-3 px-3 py-1 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
-                  >
-                    <span>More info</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-
-                {/* Card 8: Expense Today (Light Blue bg-[#00a8e8]) */}
-                <div className="bg-[#00a8e8] rounded-lg p-3 text-white shadow-lg relative overflow-hidden flex flex-col justify-between group">
-                  <ShoppingBag className="w-16 h-16 absolute -right-2 -top-2 opacity-20 text-white pointer-events-none" />
-                  <div>
-                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-0.5">
-                      Rs. {expenseToday.toLocaleString()}
-                    </h3>
-                    <p className="text-xs sm:text-sm font-medium opacity-90 text-white">Expense Today</p>
-                  </div>
-                  <div
-                    onClick={() => setActiveTab("expenses")}
-                    className="bg-black/15 -mx-3 -mb-3 mt-3 px-3 py-1 flex items-center justify-between text-xs text-white/90 font-medium cursor-pointer hover:bg-black/25 transition-colors"
-                  >
-                    <span>More info</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
+                    <Link
+                      href="/stock"
+                      className="p-3 rounded-xl border border-indigo-100 bg-indigo-50/40 hover:bg-indigo-50 hover:border-indigo-300 transition-all group flex items-start gap-3 shadow-2xs"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                        <Building className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-xs font-bold text-slate-900 group-hover:text-indigo-700 truncate font-urdu">
+                            سکول سٹور و انوینٹری
+                          </h4>
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800">
+                            Stock Manager
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
+                          خریداری، اجراء، لوکیشن ٹریکنگ و سلپ
+                        </p>
+                      </div>
+                    </Link>
                   </div>
                 </div>
               </div>
