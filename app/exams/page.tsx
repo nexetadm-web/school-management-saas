@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { resolveActiveSchoolContext } from "@/lib/school-context";
+import { SchoolLogo } from "@/components/school-branding";
 import { getTodayPKDate } from "@/lib/date-utils";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -405,8 +406,8 @@ export default function ExamsAndReportCardPage() {
   }, [classStudents, marksMap, classActiveSubjects]);
 
   const currentExamObj = exams.find((e) => String(e.id) === String(selectedExamId));
-  const schoolTitle = schoolContext?.schoolName || "OA SMART SCHOOL SYSTEM";
-  const schoolAddress = schoolContext?.schoolAddress || "Main Campus, Education Hub";
+  const schoolTitle = schoolContext?.schoolName || "Registered School";
+  const schoolAddress = schoolContext?.schoolAddress || (schoolContext?.schoolCity ? `Campus, ${schoolContext.schoolCity}` : "School Campus");
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans pb-16">
@@ -894,9 +895,7 @@ export default function ExamsAndReportCardPage() {
                     {/* Official Dynamic School Header */}
                     <div className="border-b-2 border-slate-800 pb-3 text-center relative">
                       <div className="flex items-center justify-center gap-3 mb-1.5">
-                        <div className="w-11 h-11 rounded-full bg-[#f1c40f] text-[#1e3a5f] font-black text-lg flex items-center justify-center shadow-md">
-                          OA
-                        </div>
+                        <SchoolLogo name={schoolTitle} logoUrl={schoolContext?.schoolLogo} size="md" />
                         <div>
                           <h1 className="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-wide">
                             {schoolTitle}

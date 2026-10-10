@@ -51,7 +51,11 @@ import {
   Coins,
   Package,
   Bus,
+  Settings,
+  MessageSquare,
 } from "lucide-react";
+import { SchoolLogo } from "@/components/school-branding";
+import { getSchoolInitials } from "@/lib/school-context";
 import { jsPDF } from "jspdf";
 import {
   ResponsiveContainer,
@@ -153,7 +157,7 @@ export default function Home() {
   // Auth & Multi-tenant State
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [schoolId, setSchoolId] = useState<number | string | null>(null);
-  const [schoolName, setSchoolName] = useState<string>("OA Smart School");
+  const [schoolName, setSchoolName] = useState<string>("Registered School");
   const [availableSchools, setAvailableSchools] = useState<
     Array<{ id: string | number; name: string; city?: string | null }>
   >([]);
@@ -256,7 +260,7 @@ export default function Home() {
         .maybeSingle();
 
       if (schoolData && schoolData.id) {
-        setSchoolName(schoolData.name || "OA Smart School");
+        setSchoolName(schoolData.name || "Registered School");
         setSchoolId(schoolData.id);
         return schoolData.id;
       }
@@ -418,10 +422,23 @@ export default function Home() {
         setErrorMsg("No school associated with this user. Please sign up or contact support.");
         setLoading(false);
       }
-      setChartMounted(true);
     };
 
     initAuthAndFetch();
+
+    const handleSchoolChanged = (e: any) => {
+      if (e.detail?.schoolName) {
+        setSchoolName(e.detail.schoolName);
+        if (e.detail.schoolId && String(e.detail.schoolId) !== String(schoolId)) {
+          setSchoolId(e.detail.schoolId);
+          fetchAllData(e.detail.schoolId);
+        }
+      }
+    };
+    window.addEventListener("oa-school-changed", handleSchoolChanged);
+    return () => {
+      window.removeEventListener("oa-school-changed", handleSchoolChanged);
+    };
   }, []);
 
   const handleLogout = async () => {
@@ -850,7 +867,7 @@ export default function Home() {
       const fatherName = effectiveStudent?.father_name || "N/A";
       const isPaid = fee.status.toLowerCase() === "paid";
       const amountNum = Number(fee.amount || 0);
-      const currentSchoolName = schoolName || "OA SMART SCHOOL";
+      const currentSchoolName = schoolName || "Registered School";
       const receiptDate = fee.created_at
         ? new Date(fee.created_at).toLocaleDateString("en-US", {
             year: "numeric",
@@ -862,7 +879,7 @@ export default function Home() {
             month: "short",
             day: "numeric",
           });
-      const paymentRef = `REC-${fee.school_id || "OA"}-${fee.id.toString().padStart(6, "0")}`;
+      const paymentRef = `REC-${fee.school_id || "SCH"}-${fee.id.toString().padStart(6, "0")}`;
 
       // Outer Border Frame
       doc.setDrawColor(226, 232, 240);
@@ -873,13 +890,13 @@ export default function Home() {
       doc.setFillColor(240, 244, 248);
       doc.roundedRect(10, 10, 128, 36, 3, 3, "F");
 
-      // OA Logo Circular Badge (OA Brand Blue & Yellow)
+      // School Logo Badge with dynamic initials
       doc.setFillColor(30, 58, 95); // #1e3a5f
       doc.roundedRect(15, 15, 20, 20, 3, 3, "F");
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(13);
+      doc.setFontSize(11);
       doc.setTextColor(241, 196, 15); // #f1c40f
-      doc.text("OA", 25, 27.5, { align: "center" });
+      doc.text(getSchoolInitials(currentSchoolName), 25, 27.5, { align: "center" });
 
       // School Name & Subtitles
       doc.setFont("helvetica", "bold");
@@ -980,7 +997,7 @@ export default function Home() {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(6);
         doc.setTextColor(16, 185, 129);
-        doc.text("VERIFIED BY OA ACCOUNTS", 111, feeBoxY + 18, { align: "center" });
+        doc.text(`VERIFIED BY ${getSchoolInitials(currentSchoolName)} ACCOUNTS`, 111, feeBoxY + 18, { align: "center" });
       } else {
         doc.setDrawColor(239, 68, 68);
         doc.setLineWidth(1.2);
@@ -996,7 +1013,7 @@ export default function Home() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7.5);
       doc.setTextColor(148, 163, 184);
-      doc.text("Computer-generated payment voucher. OA Smart School Fee System.", 14, 178);
+      doc.text(`Computer-generated payment voucher. ${currentSchoolName} Fee System.`, 14, 178);
 
       doc.setDrawColor(203, 213, 225);
       doc.setLineWidth(0.4);
@@ -1036,7 +1053,7 @@ export default function Home() {
     const studentClass = student?.class || getStudentClass(rec) || "";
     const amountVal = Number(rec.amount || 0).toLocaleString();
     const classStr = studentClass ? ` (${studentClass})` : "";
-    const message = `Dear Parent, Fee for ${studentName}${classStr} for ${rec.month} Rs.${amountVal} is Pending. - OA Smart School`;
+    const message = `Dear Parent, Fee for ${studentName}${classStr} for ${rec.month} Rs.${amountVal} is Pending. - ${schoolName || "Registered School"}`;
 
     const targetUrl = cleanPhone
       ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
@@ -1293,6 +1310,10 @@ export default function Home() {
     { href: "/admissions", label: "Online Admissions", icon: FileCheck, badge: "Desk" },
     { href: "/homework", label: "Daily Homework", icon: BookOpen, badge: "Diary" },
     { href: "/class-subjects", label: "Class Subjects", icon: BookMarked, badge: "Assign" },
+    { href: "/parents-communication", label: "Parent WhatsApp Portal", icon: MessageSquare, badge: "Auto Alert" },
+    { href: "/fees/online", label: "Online Fees & QR", icon: Wallet, badge: "EasyPaisa" },
+    { href: "/stock/prediction", label: "AI Stock Forecast", icon: Sparkles, badge: "AI Alert" },
+    { href: "/settings", label: "سکول پروفائل و برانڈنگ", icon: Settings, badge: "Profile" },
   ];
 
   // GOVT FUNDS REGISTERS (NSB & FTF)
@@ -1306,10 +1327,8 @@ export default function Home() {
       {/* 1. DESKTOP LEFT SIDEBAR (bg-[#1e3a5f] Dark Blue Theme) */}
       <aside className="w-64 shrink-0 hidden lg:flex flex-col h-[100dvh] sticky top-0 bg-[#1e3a5f] text-white shadow-xl z-30 overflow-hidden">
         {/* Fixed Top Header */}
-        <div className="shrink-0 p-4 border-b border-blue-900/60 text-center">
-          <div className="w-14 h-14 rounded-full bg-[#f1c40f] text-[#1e3a5f] font-black text-xl flex items-center justify-center shadow-lg mx-auto mb-2">
-            OA
-          </div>
+        <div className="shrink-0 p-4 border-b border-blue-900/60 text-center flex flex-col items-center">
+          <SchoolLogo name={schoolName} size="md" className="mx-auto mb-2 ring-2 ring-yellow-400/50 shadow-lg" />
           <h1 className="text-base font-bold text-white tracking-wide truncate max-w-full">
             {schoolName}
           </h1>
@@ -1448,9 +1467,7 @@ export default function Home() {
             {/* Top Fixed Header */}
             <div className="shrink-0 p-4 border-b border-blue-900/60 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#f1c40f] text-[#1e3a5f] font-bold flex items-center justify-center text-sm shadow-md">
-                  OA
-                </div>
+                <SchoolLogo name={schoolName} size="sm" className="ring-2 ring-yellow-400/50" />
                 <div>
                   <h2 className="text-sm font-bold text-white truncate max-w-[150px]">{schoolName}</h2>
                   <p className="text-[10px] text-emerald-400 font-semibold">School Active</p>
@@ -2038,6 +2055,74 @@ export default function Home() {
                       </h3>
                       <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
                         Daily diary with WhatsApp broadcast
+                      </p>
+                    </div>
+                  </Link>
+
+                  <Link
+                    href="/parents-communication"
+                    className="p-3.5 rounded-xl border border-emerald-100 bg-emerald-50/40 hover:bg-emerald-50 hover:border-emerald-300 transition-all group flex items-start gap-3 shadow-2xs"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                      <MessageSquare className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-bold text-slate-900 group-hover:text-emerald-700 truncate">
+                        Parent WhatsApp Portal
+                      </h3>
+                      <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
+                        Absent alerts & fee receipts log
+                      </p>
+                    </div>
+                  </Link>
+
+                  <Link
+                    href="/fees/online"
+                    className="p-3.5 rounded-xl border border-cyan-100 bg-cyan-50/40 hover:bg-cyan-50 hover:border-cyan-300 transition-all group flex items-start gap-3 shadow-2xs"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-cyan-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                      <Wallet className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-bold text-slate-900 group-hover:text-cyan-700 truncate">
+                        Online Fees & QR
+                      </h3>
+                      <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
+                        EasyPaisa/JazzCash Trx verification
+                      </p>
+                    </div>
+                  </Link>
+
+                  <Link
+                    href="/stock/prediction"
+                    className="p-3.5 rounded-xl border border-violet-100 bg-violet-50/40 hover:bg-violet-50 hover:border-violet-300 transition-all group flex items-start gap-3 shadow-2xs"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-violet-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-bold text-slate-900 group-hover:text-violet-700 truncate">
+                        AI Stock Forecaster
+                      </h3>
+                      <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
+                        Predict low items & auto purchase
+                      </p>
+                    </div>
+                  </Link>
+
+                  <Link
+                    href="/settings"
+                    className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-100 hover:border-slate-300 transition-all group flex items-start gap-3 shadow-2xs"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-[#1e3a5f] text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                      <Settings className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-bold text-slate-900 group-hover:text-blue-900 truncate">
+                        School Branding & Info
+                      </h3>
+                      <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
+                        Logo, accounts, address & profile
                       </p>
                     </div>
                   </Link>

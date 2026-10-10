@@ -527,17 +527,20 @@ export default function IDCardGeneratorPage() {
 
                 {pageStudents.map((student) => {
                   const qr = qrCodes[String(student.id)];
-                  const schoolTitle = schoolContext?.schoolName || "OA SMART SCHOOL";
-                  const schoolInitials = schoolTitle
-                    .split(" ")
-                    .map((w: string) => w[0])
-                    .filter(Boolean)
-                    .slice(0, 2)
-                    .join("")
-                    .toUpperCase() || "OA";
-                  const schoolSub = schoolContext?.city
-                    ? `${schoolContext.city} • Session ${sessionYear}`
-                    : `Smart School System • Session ${sessionYear}`;
+                  const schoolTitle = schoolContext?.schoolName || "Registered School";
+                  const schoolInitials =
+                    schoolContext?.schoolInitials ||
+                    schoolTitle
+                      .split(" ")
+                      .map((w: string) => w[0])
+                      .filter(Boolean)
+                      .slice(0, 2)
+                      .join("")
+                      .toUpperCase() ||
+                    "SC";
+                  const schoolSub = schoolContext?.schoolCity || schoolContext?.city
+                    ? `${schoolContext.schoolCity || schoolContext.city} • Session ${sessionYear}`
+                    : `Academic Session ${sessionYear}`;
 
                   return (
                     <div
@@ -552,9 +555,9 @@ export default function IDCardGeneratorPage() {
                       {/* Top School Header Strip */}
                       <div className={`${themeStyles.headerBg} ${themeStyles.headerText} px-3 py-1.5 flex items-center justify-between`}>
                         <div className="flex items-center gap-2">
-                          {schoolContext?.logoUrl ? (
+                          {(schoolContext?.schoolLogo || schoolContext?.logoUrl) ? (
                             <img
-                              src={schoolContext.logoUrl}
+                              src={schoolContext.schoolLogo || schoolContext.logoUrl}
                               alt="Logo"
                               className="w-6 h-6 rounded-full object-cover bg-white p-0.5 shadow-xs"
                             />

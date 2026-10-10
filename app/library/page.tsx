@@ -50,7 +50,7 @@ export default function LibraryPage() {
 
   const [schoolContext, setSchoolContext] = useState<any>({
     schoolId: "",
-    schoolName: "OA Smart School",
+    schoolName: "Registered School",
   });
 
   // Form states

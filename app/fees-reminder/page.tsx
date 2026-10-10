@@ -106,7 +106,7 @@ export default function FeesReminderPage() {
           month: f.month || "-",
           amount: Number(f.amount || 0),
           schoolId: f.school_id,
-          schoolName: ctx.schoolName || "OA Smart School",
+          schoolName: ctx.schoolName || "Registered School",
         });
       });
 
@@ -198,7 +198,7 @@ export default function FeesReminderPage() {
   // WhatsApp Message Generator
   const generateWhatsAppUrl = (item: UnpaidFeeItem) => {
     const cleanPhone = formatPKWhatsAppPhone(item.phone);
-    const schoolTitle = item.schoolName || schoolContext?.schoolName || "OA Smart School";
+    const schoolTitle = item.schoolName || schoolContext?.schoolName || "Registered School";
     const msg = `Assalamu Alaikum, ${item.studentName} Class ${item.studentClass} ki fee Rs. ${item.amount.toLocaleString()} pending hai. Date ${todayPK}. - ${schoolTitle}.`;
     
     if (cleanPhone) {
@@ -364,7 +364,7 @@ export default function FeesReminderPage() {
                 School Active Context
               </p>
               <h3 className="text-base font-bold text-slate-900 mt-1 truncate max-w-[170px]" title={schoolContext?.schoolName}>
-                {schoolContext?.schoolName || "OA Smart School"}
+                {schoolContext?.schoolName || "Registered School"}
               </h3>
               <p className="text-[11px] text-slate-500 font-medium mt-0.5">Date: {todayPK}</p>
             </div>

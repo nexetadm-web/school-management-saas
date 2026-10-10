@@ -216,7 +216,7 @@ export default function TimetablePage() {
                 </h1>
               </div>
               <p className="text-[11px] text-slate-500">
-                {schoolContext?.schoolName || "OA Smart School"} • 8 Periods × 6 Days
+                {schoolContext?.schoolName || "Registered School"} • 8 Periods × 6 Days
               </p>
             </div>
           </div>
@@ -263,7 +263,7 @@ export default function TimetablePage() {
         {/* Dynamic School Header for Print */}
         <div className="hidden print:block text-center border-b-2 border-slate-900 pb-3 mb-4">
           <h2 className="text-xl font-black text-slate-900">
-            {schoolContext?.schoolName || "OA Smart School System"}
+            {schoolContext?.schoolName || "Registered School"}
           </h2>
           <p className="text-xs font-bold text-slate-600">
             Official Class Timetable - {selectedClass} (Session 2026-2027)

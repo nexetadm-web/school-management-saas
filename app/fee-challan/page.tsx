@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { resolveActiveSchoolContext } from "@/lib/school-context";
 import { getTodayPKDate } from "@/lib/date-utils";
+import QRCode from "qrcode";
+import { SchoolLogo } from "@/components/school-branding";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import {
@@ -56,6 +58,7 @@ export default function FeeChallanPage() {
   const [discount, setDiscount] = useState<number>(0);
   const [bankName, setBankName] = useState<string>("Meezan Bank / HBL / Cash Counter");
   const [bankAccount, setBankAccount] = useState<string>("PK92MEZN00012345678901");
+  const [qrMap, setQrMap] = useState<Record<string, string>>({});
 
   const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const challanPrintAreaRef = useRef<HTMLDivElement>(null);
@@ -70,6 +73,8 @@ export default function FeeChallanPage() {
       setLoading(true);
       const ctx = await resolveActiveSchoolContext();
       setSchoolContext(ctx);
+      if (ctx.bankName) setBankName(ctx.bankName);
+      if (ctx.bankAccount) setBankAccount(ctx.bankAccount);
 
       let query = supabase.from("students").select("*").order("name", { ascending: true });
       if (ctx.schoolId && ctx.schoolId !== "all") {
@@ -81,6 +86,19 @@ export default function FeeChallanPage() {
 
       const studentList: Student[] = data || [];
       setStudents(studentList);
+
+      // Generate QR codes for all students
+      const qrs: Record<string, string> = {};
+      await Promise.all(
+        studentList.map(async (st) => {
+          try {
+            const qrText = `SCHOOL_ID:${ctx.schoolId || 1}\nSTUDENT:${st.name}\nCLASS:${st.class}\nCHALLAN:CH-${st.id}-${new Date().getFullYear()}\nAMOUNT:Rs.${st.monthly_fee || 2500}\nEASYPAISA:${ctx.easypaisaNo || "0300-1234567"}\nJAZZCASH:${ctx.jazzcashNo || "0301-7654321"}\nTITLE:${ctx.easypaisaTitle || ctx.schoolName}`;
+            const qrUrl = await QRCode.toDataURL(qrText, { width: 90, margin: 1 });
+            qrs[String(st.id)] = qrUrl;
+          } catch (e) {}
+        })
+      );
+      setQrMap(qrs);
 
       if (studentList.length > 0) {
         const classes = Array.from(new Set(studentList.map((s) => s.class)));
@@ -231,6 +249,14 @@ export default function FeeChallanPage() {
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <Link
+              href="/fees/online"
+              className="px-3 py-2 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <CreditCard className="w-3.5 h-3.5 text-emerald-700" />
+              <span>آن لائن وصولی تصدیق</span>
+            </Link>
+
             <button
               onClick={handleDownloadPDF}
               disabled={downloadingPdf || studentsToPrint.length === 0}
@@ -434,9 +460,7 @@ export default function FeeChallanPage() {
                       <div>
                         <div className="text-center border-b border-slate-800 pb-2">
                           <div className="flex items-center justify-center gap-2 mb-1">
-                            <div className="w-6 h-6 rounded-full bg-[#f1c40f] text-[#1e3a5f] font-black text-[10px] flex items-center justify-center">
-                              OA
-                            </div>
+                            <SchoolLogo name={schoolTitle} logoUrl={schoolContext?.schoolLogo} size="xs" />
                             <h2 className="text-xs font-black uppercase text-slate-900 leading-tight truncate">
                               {schoolTitle}
                             </h2>
@@ -527,9 +551,34 @@ export default function FeeChallanPage() {
                         </div>
 
                         {/* Payment Notes */}
-                        <p className="text-[8px] text-slate-400 italic mt-1.5 leading-tight">
+                        <p className="text-[8px] text-slate-400 italic mt-1 leading-tight">
                           * Please deposit fee within due date. Late fee fine applies after {dueDate}.
                         </p>
+
+                        {/* Online Payment QR Code & Accounts */}
+                        <div className="mt-1.5 p-1 bg-slate-50 border border-slate-300 rounded text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {qrMap[String(student.id)] && (
+                              <img
+                                src={qrMap[String(student.id)]}
+                                alt="Fee QR"
+                                className="w-11 h-11 object-contain border border-slate-300 rounded bg-white p-0.5 shrink-0"
+                              />
+                            )}
+                            <div className="text-left text-[7.5px] leading-tight overflow-hidden">
+                              <p className="font-bold text-slate-800">Scan & Pay (Online Fee)</p>
+                              <p className="font-mono text-emerald-700 font-semibold truncate">
+                                EP: {schoolContext?.easypaisaNo || "0300-XXXXXXX"}
+                              </p>
+                              <p className="font-mono text-rose-700 font-semibold truncate">
+                                JC: {schoolContext?.jazzcashNo || "0301-XXXXXXX"}
+                              </p>
+                              <p className="text-slate-500 font-medium truncate max-w-[120px]">
+                                Title: {schoolContext?.easypaisaTitle || schoolTitle}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Signatures */}

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { resolveActiveSchoolContext } from "@/lib/school-context";
+import { SchoolLogo } from "@/components/school-branding";
 import {
   Award,
   ChevronLeft,
@@ -39,9 +40,9 @@ export default function CertificatesPage() {
   // School context
   const [schoolContext, setSchoolContext] = useState<any>({
     schoolId: "",
-    schoolName: "OA Smart School",
-    schoolAddress: "Main Campus, Sargodha Road, Sillanwali",
-    schoolPhone: "0300-1234567",
+    schoolName: "Registered School",
+    schoolAddress: "School Campus",
+    schoolPhone: "",
     schoolLogo: "",
   });
 
@@ -455,8 +456,12 @@ export default function CertificatesPage() {
                   <span>Date: {issueDate}</span>
                 </div>
 
-                <div className="inline-block p-2 bg-indigo-50 rounded-full border border-indigo-200 mb-2">
-                  <GraduationCap className="w-8 h-8 text-indigo-700 mx-auto" />
+                <div className="flex justify-center mb-2">
+                  <SchoolLogo
+                    name={schoolContext.schoolName}
+                    logoUrl={schoolContext.schoolLogo}
+                    size="lg"
+                  />
                 </div>
 
                 <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-wide uppercase">

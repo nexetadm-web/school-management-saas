@@ -480,7 +480,7 @@ export default function AttendancePage() {
                       {status === "Absent" && st.phone && (
                         <a
                           href={`https://wa.me/${formatPKWhatsAppPhone(st.phone)}?text=${encodeURIComponent(
-                            `محترم والدین، آپ کا بچہ/بچی ${st.name} (کلاس ${st.class}) آج بتاریخ ${attendanceDate} سکول سے غیر حاضر ہے۔ برائے مہربانی سکول کو مطلع فرمائیں۔ شکریہ - ${schoolContext?.schoolName || "OA Smart School"}`
+                            `محترم والدین، آپ کا بچہ/بچی ${st.name} (کلاس ${st.class}) آج بتاریخ ${attendanceDate} سکول سے غیر حاضر ہے۔ برائے مہربانی سکول کو مطلع فرمائیں۔ شکریہ - ${schoolContext?.schoolName || "Registered School"}`
                           )}`}
                           target="_blank"
                           rel="noreferrer"
@@ -621,7 +621,7 @@ export default function AttendancePage() {
               <div className="space-y-2 max-h-72 overflow-y-auto">
                 {absentStudents.map((st) => {
                   const phone = formatPKWhatsAppPhone(st.phone);
-                  const msg = `محترم والدین، آپ کا بچہ/بچی ${st.name} (کلاس ${st.class}) آج بتاریخ ${attendanceDate} سکول سے غیر حاضر ہے۔ برائے مہربانی سکول کو غیر حاضری کی وجہ سے مطلع فرمائیں۔ شکریہ - ${schoolContext?.schoolName || "OA Smart School"}`;
+                  const msg = `محترم والدین، آپ کا بچہ/بچی ${st.name} (کلاس ${st.class}) آج بتاریخ ${attendanceDate} سکول سے غیر حاضر ہے۔ برائے مہربانی سکول کو غیر حاضری کی وجہ سے مطلع فرمائیں۔ شکریہ - ${schoolContext?.schoolName || "Registered School"}`;
 
                   return (
                     <div

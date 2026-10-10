@@ -36,7 +36,7 @@ export default function TransportPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [schoolContext, setSchoolContext] = useState<any>({
     schoolId: "",
-    schoolName: "OA Smart School",
+    schoolName: "Registered School",
   });
 
   // New route form

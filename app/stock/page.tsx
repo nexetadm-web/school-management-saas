@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { resolveActiveSchoolContext } from "@/lib/school-context";
+import { SchoolLogo } from "@/components/school-branding";
 import { getTodayPKDate } from "@/lib/date-utils";
 import { formatPKR } from "@/lib/govt-registers";
 import {
@@ -864,7 +865,7 @@ export default function StockInventoryPage() {
                 </h1>
               </div>
               <p className="text-[11px] text-slate-500 font-medium truncate max-w-md">
-                {schoolContext?.schoolName || "OA Smart School System"} • سامان، فرنیچر، لیب و سٹیشنری
+                {schoolContext?.schoolName || "Registered School"} • سامان، فرنیچر، لیب و سٹیشنری
               </p>
             </div>
           </div>
@@ -1996,14 +1997,18 @@ export default function StockInventoryPage() {
             <div className="p-6 space-y-4 text-xs font-sans border-4 border-slate-900 m-3 rounded-xl bg-white">
               {/* Dynamic School Header */}
               <div className="text-center pb-3 border-b-2 border-slate-900">
-                <div className="w-12 h-12 rounded-full bg-slate-900 text-yellow-400 font-black text-base flex items-center justify-center mx-auto mb-1">
-                  OA
+                <div className="flex justify-center mb-1">
+                  <SchoolLogo
+                    name={schoolContext?.schoolName || "School System"}
+                    logoUrl={schoolContext?.schoolLogo}
+                    size="md"
+                  />
                 </div>
                 <h2 className="text-base font-black text-slate-900 font-urdu">
-                  {schoolContext?.schoolName || "OA Smart School System"}
+                  {schoolContext?.schoolName || "Registered School"}
                 </h2>
                 <p className="text-[10px] text-slate-500 font-medium">
-                  {schoolContext?.schoolAddress || "مین کیمپس، ایجوکیشن روڈ"} • فون: {schoolContext?.schoolPhone || "+92 300 1234567"}
+                  {schoolContext?.schoolAddress || "School Campus"} • فون: {schoolContext?.schoolPhone || ""}
                 </p>
                 <div className="mt-2 inline-block px-3 py-0.5 rounded-full bg-slate-100 border border-slate-300 font-bold text-[10px] uppercase tracking-wider text-slate-800">
                   آفیشل سٹاک خریداری رسید (Purchase Voucher)

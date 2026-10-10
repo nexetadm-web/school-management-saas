@@ -200,7 +200,7 @@ export default function HomeworkPage() {
 
   // WhatsApp Share Handler
   const handleShareWhatsApp = (item: HomeworkItem) => {
-    const schoolTitle = schoolContext?.schoolName || "OA Smart School System";
+    const schoolTitle = schoolContext?.schoolName || "Registered School System";
     const msg = `*📚 HOMEWORK DIARY - ${schoolTitle}*\n📅 Date: ${item.date} | Due: ${item.due_date}\n🎓 Class: ${item.class} | Subject: ${item.subject}\n📝 Topic: ${item.title}\n📌 Task: ${item.description}\n\n- Principal / Class Teacher, ${schoolTitle}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
