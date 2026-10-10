@@ -17,12 +17,12 @@ interface SchoolBrandingProps {
 }
 
 export function SchoolLogo({
-  name,
+  name = "School System",
   logoUrl,
   size = "md",
   className = "",
 }: {
-  name: string;
+  name?: string;
   logoUrl?: string | null;
   size?: "xs" | "sm" | "md" | "lg" | "xl";
   className?: string;
@@ -57,24 +57,27 @@ export function SchoolLogo({
 }
 
 export function SchoolPrintHeader({
-  name,
+  name = "School System",
   logoUrl,
   address,
   phone,
   title,
   subTitle,
+  subtitle,
   refNo,
   date,
 }: {
-  name: string;
+  name?: string;
   logoUrl?: string | null;
   address?: string | null;
   phone?: string | null;
-  title: string;
+  title?: string;
   subTitle?: string;
+  subtitle?: string;
   refNo?: string;
   date?: string;
 }) {
+  const displaySubtitle = subTitle || subtitle;
   return (
     <div className="border-b-2 border-slate-800 pb-4 mb-4 text-center">
       <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 mb-2">
@@ -94,11 +97,13 @@ export function SchoolPrintHeader({
       </div>
 
       <div className="mt-3">
-        <span className="inline-block px-6 py-1 rounded-full bg-slate-900 text-white font-bold text-xs uppercase tracking-wider">
-          {title}
-        </span>
-        {subTitle && (
-          <p className="text-[11px] text-slate-600 font-urdu mt-1">{subTitle}</p>
+        {(title || displaySubtitle) && (
+          <span className="inline-block px-6 py-1 rounded-full bg-slate-900 text-white font-bold text-xs uppercase tracking-wider">
+            {title || displaySubtitle}
+          </span>
+        )}
+        {displaySubtitle && title && (
+          <p className="text-[11px] text-slate-600 font-urdu mt-1">{displaySubtitle}</p>
         )}
       </div>
     </div>

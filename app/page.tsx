@@ -1310,6 +1310,7 @@ export default function Home() {
     { href: "/admissions", label: "Online Admissions", icon: FileCheck, badge: "Desk" },
     { href: "/homework", label: "Daily Homework", icon: BookOpen, badge: "Diary" },
     { href: "/class-subjects", label: "Class Subjects", icon: BookMarked, badge: "Assign" },
+    { href: "/payroll", label: "سٹاف پے رول (Payroll)", icon: Banknote, badge: "Auto" },
     { href: "/parents-communication", label: "Parent WhatsApp Portal", icon: MessageSquare, badge: "Auto Alert" },
     { href: "/fees/online", label: "Online Fees & QR", icon: Wallet, badge: "EasyPaisa" },
     { href: "/stock/prediction", label: "AI Stock Forecast", icon: Sparkles, badge: "AI Alert" },
@@ -2106,6 +2107,23 @@ export default function Home() {
                       </h3>
                       <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
                         Predict low items & auto purchase
+                      </p>
+                    </div>
+                  </Link>
+
+                  <Link
+                    href="/payroll"
+                    className="p-3.5 rounded-xl border border-emerald-100 bg-emerald-50/40 hover:bg-emerald-50 hover:border-emerald-300 transition-all group flex items-start gap-3 shadow-2xs"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                      <Banknote className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-bold text-slate-900 group-hover:text-emerald-700 truncate">
+                        Auto Staff Payroll
+                      </h3>
+                      <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
+                        Attendance deduction & salary slip
                       </p>
                     </div>
                   </Link>
