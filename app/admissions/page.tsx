@@ -155,6 +155,47 @@ export default function AdminAdmissionsPage() {
 
   useEffect(() => {
     loadAdmissions();
+
+    if (!school.id || school.id === "all") return;
+
+    // Realtime subscription for incoming applications (<2s)
+    const channel = supabase
+      .channel(`realtime_admissions_${school.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "admission_applications",
+          filter: `school_id=eq.${school.id}`,
+        },
+        (payload: any) => {
+          if (payload.new) {
+            const newItem: AdmissionApplication = {
+              id: payload.new.tracking_no || payload.new.id,
+              school_id: payload.new.school_id,
+              student_name: payload.new.full_name || payload.new.student_name,
+              father_name: payload.new.father_name,
+              dob: payload.new.dob || "N/A",
+              gender: payload.new.gender || "Male",
+              class_applying: payload.new.desired_class || payload.new.class_applying || "1st",
+              previous_school: payload.new.previous_school,
+              phone: payload.new.phone,
+              address: payload.new.address,
+              photo_url: payload.new.photo_url,
+              status: payload.new.status || "pending",
+              created_at: payload.new.created_at,
+            };
+            setApplications((prev) => [newItem, ...prev.filter((p) => p.id !== newItem.id)]);
+            showToast("success", `نئی داخلہ درخواست موصول ہوئی: ${newItem.student_name}`);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [school.id]);
 
   // Filtered Applications
@@ -267,20 +308,21 @@ export default function AdminAdmissionsPage() {
     }
   };
 
-  // Public Admission Link
+  // Public Admission Link with School Specific Slug
+  const schoolSlug = school.slug || (school as any).slug || (school.name ? school.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-" + String(school.id || 1).slice(0, 4) : String(school.id || 1));
   const publicLink = typeof window !== "undefined"
-    ? `${window.location.origin}/apply/${school.id || 1}`
-    : "http://localhost:3001/apply/1";
+    ? `${window.location.origin}/apply/${schoolSlug}`
+    : `http://localhost:3001/apply/${schoolSlug}`;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(publicLink);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 3000);
-    showToast("success", "آن لائن داخلہ لنک کاپی ہو گیا!");
+    showToast("success", `لنک کاپی ہو گیا: /apply/${schoolSlug}`);
   };
 
   const handleShareWhatsApp = () => {
-    const msg = `السلام علیکم! محترم والدین، ${school.name} کے نئے تعلیمی سیشن 2026-2027 کے لیے آن لائن داخلے شروع ہیں۔ گھر بیٹھے داخلہ فارم پر کرنے کے لیے لنک پر کلک کریں: ${publicLink}`;
+    const msg = `ہمارے سکول ${school.name} میں آن لائن داخلہ جاری ہے - لنک: ${publicLink}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
 

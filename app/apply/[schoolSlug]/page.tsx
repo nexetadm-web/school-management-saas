@@ -23,6 +23,8 @@ import {
   School,
   Clock,
   ArrowRight,
+  MapPin,
+  Mail,
 } from "lucide-react";
 
 interface ApplyPageProps {
@@ -31,22 +33,24 @@ interface ApplyPageProps {
 
 export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
   const unwrappedParams = use(params);
-  const schoolSlug = decodeURIComponent(unwrappedParams.schoolSlug || "1");
+  const rawSlug = decodeURIComponent(unwrappedParams.schoolSlug || "").trim();
 
   const [loadingSchool, setLoadingSchool] = useState(true);
+  const [schoolNotFound, setSchoolNotFound] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submittedData, setSubmittedData] = useState<any>(null);
 
   // Dynamic School Details
-  const [schoolInfo, setSchoolInfo] = useState({
-    id: 1,
-    name: "Registered School System",
-    city: "Pakistan",
-    address: "Campus Education Complex",
-    phone: "+92 300 1234567",
-    email: "info@school.edu.pk",
-    logo_url: null as string | null,
-  });
+  const [schoolInfo, setSchoolInfo] = useState<{
+    id: number | string;
+    name: string;
+    city?: string;
+    address?: string;
+    phone?: string;
+    email?: string;
+    logo_url?: string | null;
+    slug?: string;
+  } | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -76,44 +80,93 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
     const fetchSchool = async () => {
       try {
         setLoadingSchool(true);
-        let query = supabase.from("schools").select("*");
+        setSchoolNotFound(false);
 
-        const numericId = Number(schoolSlug);
-        if (!isNaN(numericId) && numericId > 0) {
-          query = query.eq("id", numericId);
-        } else {
-          query = query.ilike("name", `%${schoolSlug.replace(/-/g, " ")}%`);
+        let targetSchool: any = null;
+
+        // Try lookup by slug or id in Supabase
+        try {
+          const numericId = Number(rawSlug);
+          let query = supabase.from("schools").select("id, name, logo_url, address, phone, email, city, slug");
+
+          if (!isNaN(numericId) && numericId > 0) {
+            query = query.or(`id.eq.${numericId},slug.eq.${rawSlug}`);
+          } else {
+            query = query.or(`slug.eq.${rawSlug},name.ilike.%${rawSlug.replace(/-/g, " ")}%`);
+          }
+
+          const { data, error } = await query.limit(1);
+          if (!error && data && data.length > 0) {
+            targetSchool = data[0];
+          }
+        } catch (dbErr) {
+          console.warn("DB school lookup notice:", dbErr);
         }
 
-        const { data, error } = await query.limit(1);
-        if (!error && data && data.length > 0) {
-          const s = data[0];
-          setSchoolInfo({
-            id: s.id,
-            name: s.name,
-            city: s.city || "Pakistan",
-            address: s.address || `${s.city || "Main Campus"}, Education Road`,
-            phone: s.phone || "+92 300 1234567",
-            email: s.email || "admissions@school.edu.pk",
-            logo_url: s.logo_url || null,
-          });
+        // Fallback from localStorage cached schools list if DB offline or empty
+        if (!targetSchool && typeof window !== "undefined") {
+          try {
+            const cachedStr = localStorage.getItem("oa_cached_schools_list");
+            if (cachedStr) {
+              const list = JSON.parse(cachedStr);
+              targetSchool = list.find(
+                (s: any) =>
+                  String(s.id) === String(rawSlug) ||
+                  s.slug === rawSlug ||
+                  (s.name && s.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").includes(rawSlug.toLowerCase()))
+              );
+            }
+          } catch (e) {}
         }
+
+        // If still not found and rawSlug looks valid, fallback to first school or mock school
+        if (!targetSchool) {
+          // If rawSlug is '1' or numeric, provide graceful school profile
+          if (rawSlug === "1" || !isNaN(Number(rawSlug))) {
+            targetSchool = {
+              id: Number(rawSlug) || 1,
+              name: "Registered School System",
+              city: "Pakistan",
+              address: "Main Campus, Education Hub",
+              phone: "+92 300 1234567",
+              email: "admissions@school.edu.pk",
+              logo_url: null,
+              slug: rawSlug,
+            };
+          } else {
+            setSchoolNotFound(true);
+            setLoadingSchool(false);
+            return;
+          }
+        }
+
+        setSchoolInfo({
+          id: targetSchool.id,
+          name: targetSchool.name || "Registered School System",
+          city: targetSchool.city || "Pakistan",
+          address: targetSchool.address || `${targetSchool.city || "Main Campus"}, Education Road`,
+          phone: targetSchool.phone || "+92 300 1234567",
+          email: targetSchool.email || "admissions@school.edu.pk",
+          logo_url: targetSchool.logo_url || null,
+          slug: targetSchool.slug || rawSlug,
+        });
       } catch (err) {
         console.error("School lookup error", err);
+        setSchoolNotFound(true);
       } finally {
         setLoadingSchool(false);
       }
     };
 
     fetchSchool();
-  }, [schoolSlug]);
+  }, [rawSlug]);
 
   // Handle Photo Upload Preview
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 3 * 1024 * 1024) {
-        showToast("error", "Image size should be under 3MB.");
+        showToast("error", "تصویر کا سائز 3MB سے کم ہونا چاہیے۔");
         return;
       }
       const reader = new FileReader();
@@ -130,41 +183,56 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!schoolInfo) {
+      showToast("error", "سکول کی تفصیلات دستیاب نہیں ہیں۔");
+      return;
+    }
+
     if (!formData.student_name.trim() || !formData.father_name.trim() || !formData.phone.trim()) {
-      showToast("error", "براہ کرم لازمی خانے (نام، والد کا نام، موبائل نمبر) پر کریں۔");
+      showToast("error", "براہ کرم تمام لازمی معلومات (نام، والد کا نام، موبائل نمبر) درج کریں۔");
       return;
     }
 
     try {
       setSubmitting(true);
-      const trackingId = `ADM-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-      const admissionRecord = {
-        school_id: schoolInfo.id,
+      // Generate sequential-like tracking number per school
+      const schoolIdPrefix = String(schoolInfo.id);
+      const randomSeed = Math.floor(1000 + Math.random() * 9000);
+      const trackingNo = `ADM-2026-${schoolIdPrefix.padStart(2, "0")}${randomSeed}`;
+
+      const applicationPayload = {
+        school_id: schoolInfo.id, // CRITICAL: Only to this specific school
+        tracking_no: trackingNo,
+        full_name: formData.student_name.trim(),
         student_name: formData.student_name.trim(),
         father_name: formData.father_name.trim(),
+        desired_class: formData.class_applying,
+        class_applying: formData.class_applying,
         dob: formData.dob,
         gender: formData.gender,
-        class_applying: formData.class_applying,
-        previous_school: formData.previous_school.trim() || "N/A",
         phone: formData.phone.trim(),
         address: formData.address.trim() || "N/A",
+        previous_school: formData.previous_school.trim() || "N/A",
         photo_url: formData.photo_url || null,
+        status: "pending",
         data: {
           submitted_at: todayPK,
-          device: typeof window !== "undefined" ? navigator.userAgent : "Web",
+          school_name: schoolInfo.name,
+          school_slug: schoolInfo.slug,
+          user_agent: typeof window !== "undefined" ? navigator.userAgent : "web",
         },
-        status: "pending",
         applied_at: new Date().toISOString(),
       };
 
-      // 1. Save in admissions and admission_applications table in Supabase
+      // 1. Insert into admission_applications
       try {
-        await supabase.from("admission_applications").insert([admissionRecord]);
+        await supabase.from("admission_applications").insert([applicationPayload]);
       } catch (dbErr) {
-        console.warn("admission_applications insert fallback:", dbErr);
+        console.warn("admission_applications insert error fallback:", dbErr);
       }
 
+      // 2. Also insert into admissions table for backward compatibility
       try {
         await supabase.from("admissions").insert([{
           school_id: schoolInfo.id,
@@ -181,24 +249,24 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
         }]);
       } catch (e) {}
 
-      // 2. Fallback to localStorage
+      // 3. Fallback to localStorage isolated by school_id
       const localStoreKey = `oa_school_admissions_${schoolInfo.id}`;
       const existing = typeof window !== "undefined" ? localStorage.getItem(localStoreKey) : null;
       let appList = existing ? JSON.parse(existing) : [];
       appList.unshift({
-        id: trackingId,
-        ...admissionRecord,
+        id: trackingNo,
+        ...applicationPayload,
       });
       if (typeof window !== "undefined") {
         localStorage.setItem(localStoreKey, JSON.stringify(appList));
       }
 
       setSubmittedData({
-        trackingId,
-        ...admissionRecord,
+        school_name: schoolInfo.name,
+        ...applicationPayload,
       });
 
-      showToast("success", "درخواست کامیابی سے جمع ہو گئی ہے! داخلہ آفس جلد رابطہ کرے گا۔");
+      showToast("success", "درخواست کامیابی سے وصول ہو گئی!");
     } catch (err: any) {
       console.error(err);
       showToast("error", err.message || "درخواست جمع نہیں ہو سکی، دوبارہ کوشش کریں۔");
@@ -211,25 +279,81 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
     window.print();
   };
 
+  if (loadingSchool) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="text-center space-y-3">
+          <div className="w-12 h-12 rounded-full border-4 border-indigo-600 border-t-transparent animate-spin mx-auto" />
+          <p className="text-sm font-bold text-slate-700">سکول پورٹل لوڈ ہو رہا ہے...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (schoolNotFound || !schoolInfo) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl p-8 border border-slate-200 text-center space-y-4 shadow-xl">
+          <div className="w-16 h-16 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+            <AlertCircle className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-black text-slate-900">سکول نہیں ملا (School Not Found)</h2>
+          <p className="text-xs text-slate-500">
+            مطلوبہ داخلہ لنک درست نہیں ہے یا سکول موجود نہیں ہے۔ براہ کرم سکول انتظامیہ سے دوبارہ لنک حاصل فرمائیں۔
+          </p>
+          <div className="pt-2">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-colors"
+            >
+              <span>مرکزی صفحہ پر جائیں</span>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-linear-to-b from-slate-50 via-white to-slate-100 text-slate-800 font-sans pb-16">
-      {/* Top Banner */}
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100 text-slate-800 font-sans pb-16">
+      {/* Top Dynamic School Header */}
       <header className="bg-[#1e3a5f] text-white border-b border-blue-950 py-4 px-4 sm:px-8 shadow-md">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <SchoolLogo name={schoolInfo.name} size="md" className="ring-2 ring-yellow-400/60" />
+        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5 text-center sm:text-left">
+            {schoolInfo.logo_url ? (
+              <img
+                src={schoolInfo.logo_url}
+                alt={schoolInfo.name}
+                className="w-12 h-12 rounded-full object-cover bg-white p-1 shadow-md shrink-0 border-2 border-yellow-400"
+              />
+            ) : (
+              <SchoolLogo name={schoolInfo.name} size="md" className="ring-2 ring-yellow-400/60" />
+            )}
             <div>
-              <h1 className="text-base sm:text-xl font-bold tracking-tight text-white leading-tight">
+              <h1 className="text-lg sm:text-2xl font-black tracking-tight text-white leading-tight">
                 {schoolInfo.name}
               </h1>
-              <p className="text-xs text-blue-200 mt-0.5">
-                آن لائن داخلہ فارم (Online Admission Portal) &bull; سیشن 2026-2027
-              </p>
+              <div className="flex items-center gap-2 text-xs text-blue-200 mt-1 justify-center sm:justify-start flex-wrap">
+                <span className="font-bold text-yellow-300">سیشن 2026-2027</span>
+                <span>&bull;</span>
+                <span>آن لائن داخلہ پورٹل (Online Admission Portal)</span>
+              </div>
             </div>
           </div>
-          <div className="hidden sm:block text-right text-xs text-blue-200">
-            <p className="font-semibold text-white">{schoolInfo.phone}</p>
-            <p className="text-[11px] text-blue-300">{schoolInfo.address}</p>
+
+          <div className="text-center sm:text-right text-xs text-blue-200 space-y-0.5">
+            {schoolInfo.phone && (
+              <p className="font-semibold text-white flex items-center justify-center sm:justify-end gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-yellow-400" />
+                <span>{schoolInfo.phone}</span>
+              </p>
+            )}
+            {schoolInfo.address && (
+              <p className="text-[11px] text-blue-300 flex items-center justify-center sm:justify-end gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span className="truncate max-w-xs">{schoolInfo.address}</span>
+              </p>
+            )}
           </div>
         </div>
       </header>
@@ -255,25 +379,25 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
 
         {submittedData ? (
           /* SUCCESS SUBMISSION RECEIPT */
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-6 sm:p-8 space-y-6">
+          <div id="admission-receipt" className="bg-white rounded-2xl border border-slate-200 shadow-xl p-6 sm:p-8 space-y-6">
             <div className="text-center space-y-2">
               <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
                 <CheckCircle className="w-9 h-9" />
               </div>
-              <h2 className="text-xl font-black text-slate-900">
-                درخواست کامیابی سے موصول ہو گئی!
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900">
+                درخواست کامیابی سے وصول ہو گئی!
               </h2>
-              <p className="text-xs text-slate-500 max-w-md mx-auto">
-                آپ کے بچے کا داخلہ فارم برائے جماعت <strong className="text-slate-800">{submittedData.class_applying}</strong> سکول انتظامیہ کو موصول ہو چکا ہے۔
+              <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
+                <strong className="text-indigo-900">{submittedData.school_name}</strong> میں داخلہ فارم موصول ہو چکا ہے۔ داخلہ آفس جلد آپ کے موبائل نمبر پر رابطہ کرے گا۔
               </p>
             </div>
 
             {/* Application Voucher Card */}
-            <div className="border border-indigo-100 bg-indigo-50/30 rounded-xl p-5 space-y-4">
+            <div className="border border-indigo-100 bg-indigo-50/40 rounded-xl p-5 space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-indigo-100">
                 <div>
                   <span className="text-[10px] text-slate-400 uppercase tracking-wider block">ایپلیکیشن ٹریکنگ نمبر</span>
-                  <span className="text-lg font-black text-indigo-900">{submittedData.trackingId}</span>
+                  <span className="text-lg sm:text-xl font-black text-indigo-900">{submittedData.tracking_no}</span>
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] text-slate-400 block">تاریخ درخواست</span>
@@ -284,7 +408,7 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
                 <div>
                   <span className="text-slate-400 block text-[11px]">طالب علم کا نام:</span>
-                  <span className="font-bold text-slate-900">{submittedData.student_name}</span>
+                  <span className="font-bold text-slate-900">{submittedData.full_name}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[11px]">والد کا نام:</span>
@@ -292,10 +416,10 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[11px]">مطلوبہ کلاس:</span>
-                  <span className="font-bold text-indigo-700">Class {submittedData.class_applying}</span>
+                  <span className="font-bold text-indigo-700">Class {submittedData.desired_class}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[11px]">رابطہ نمبر:</span>
+                  <span className="text-slate-400 block text-[11px]">موبائل / واٹس ایپ:</span>
                   <span className="font-semibold text-slate-800">{submittedData.phone}</span>
                 </div>
                 <div>
@@ -304,14 +428,14 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[11px]">کیفیت (Status):</span>
-                  <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                  <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
                     زیر غور (Pending)
                   </span>
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <button
                 onClick={handlePrintSlip}
                 className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
@@ -323,7 +447,7 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
                 onClick={() => setSubmittedData(null)}
                 className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
               >
-                <span>نیا داخلہ فارم بھریں</span>
+                <span>نیا فارم بھریں</span>
               </button>
             </div>
           </div>
@@ -333,13 +457,13 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <div>
                 <h2 className="text-sm sm:text-base font-bold text-slate-900">
-                  طالب علم کی تفصیلات درج کریں
+                  داخلہ درخواست فارم برائے طلباء
                 </h2>
                 <p className="text-xs text-slate-500">
-                  تمام معلومات قومی شناختی کارڈ اور پیدائشی سرٹیفکیٹ کے مطابق لکھیں۔
+                  تمام معلومات پیدائشی سرٹیفکیٹ یا ب-فارم کے مطابق درج کریں۔
                 </p>
               </div>
-              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+              <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                 داخلے جاری ہیں
               </span>
             </div>
@@ -372,10 +496,10 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
 
               {/* Form Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Student Name */}
+                {/* Student Full Name */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    طالب علم کا پورا نام (Student Full Name) <span className="text-rose-500">*</span>
+                    طالب علم کا پورا نام (Full Name) <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -471,7 +595,7 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
                   </label>
                   <input
                     type="text"
-                    placeholder="پہلے پڑھنے والے سکول کا نام (یا فریش ایڈمشن)"
+                    placeholder="پہلے پڑھنے والے سکول کا نام (یا فریش داخلہ)"
                     value={formData.previous_school}
                     onChange={(e) => setFormData({ ...formData, previous_school: e.target.value })}
                     className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:bg-white focus:border-indigo-500"
@@ -498,7 +622,7 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-md transition-all cursor-pointer active:scale-98 disabled:opacity-50"
+                  className="w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-md transition-all cursor-pointer active:scale-98 disabled:opacity-50"
                 >
                   <Send className={`w-4 h-4 ${submitting ? "animate-pulse" : ""}`} />
                   <span>

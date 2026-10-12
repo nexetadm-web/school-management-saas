@@ -599,3 +599,29 @@ CREATE POLICY "Allow all for homeworks" ON homeworks FOR ALL USING (true) WITH C
 
 
 
+
+-- ============================================================
+-- 21. SCHOOLS SLUG MIGRATION & ADMISSIONS TRACKING
+-- ============================================================
+ALTER TABLE schools ADD COLUMN IF NOT EXISTS slug TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_schools_slug ON schools(slug);
+
+UPDATE schools 
+SET slug = LOWER(REGEXP_REPLACE(name, '[^a-zA-Z0-9]+', '-', 'g')) || '-' || SUBSTRING(id::text, 1, 4)
+WHERE slug IS NULL OR slug = '';
+
+ALTER TABLE admission_applications ADD COLUMN IF NOT EXISTS tracking_no TEXT;
+ALTER TABLE admission_applications ADD COLUMN IF NOT EXISTS full_name TEXT;
+ALTER TABLE admission_applications ADD COLUMN IF NOT EXISTS desired_class TEXT;
+
+-- ============================================================
+-- 22. ADVANCED EXPENDITURE & CATEGORIZED EXPENSES SCHEMA
+-- ============================================================
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'other';
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS bill_image_url TEXT;
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'cash';
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS expense_date DATE;
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS created_by UUID;
+
+CREATE INDEX IF NOT EXISTS idx_expenses_school_date ON expenses(school_id, date);
+CREATE INDEX IF NOT EXISTS idx_expenses_school_cat ON expenses(school_id, category);

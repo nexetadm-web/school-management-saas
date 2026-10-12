@@ -1311,6 +1311,7 @@ export default function Home() {
     { href: "/homework", label: "Daily Homework", icon: BookOpen, badge: "Diary" },
     { href: "/class-subjects", label: "Class Subjects", icon: BookMarked, badge: "Assign" },
     { href: "/payroll", label: "سٹاف پے رول (Payroll)", icon: Banknote, badge: "Auto" },
+    { href: "/dashboard/expenditure", label: "اخراجات اینالیٹکس (Expenses)", icon: Receipt, badge: "Analytics" },
     { href: "/parents-communication", label: "Parent WhatsApp Portal", icon: MessageSquare, badge: "Auto Alert" },
     { href: "/fees/online", label: "Online Fees & QR", icon: Wallet, badge: "EasyPaisa" },
     { href: "/stock/prediction", label: "AI Stock Forecast", icon: Sparkles, badge: "AI Alert" },
@@ -2124,6 +2125,23 @@ export default function Home() {
                       </h3>
                       <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
                         Attendance deduction & salary slip
+                      </p>
+                    </div>
+                  </Link>
+
+                  <Link
+                    href="/dashboard/expenditure"
+                    className="p-3.5 rounded-xl border border-amber-100 bg-amber-50/40 hover:bg-amber-50 hover:border-amber-300 transition-all group flex items-start gap-3 shadow-2xs"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-amber-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                      <Receipt className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-bold text-slate-900 group-hover:text-amber-700 truncate">
+                        Advanced Expenditure
+                      </h3>
+                      <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
+                        Category analytics & bills report
                       </p>
                     </div>
                   </Link>
@@ -2969,7 +2987,30 @@ export default function Home() {
 
           {/* TAB 6: EXPENSES */}
           {activeTab === "expenses" && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="space-y-6">
+              {/* ADVANCED EXPENDITURE PORTAL BANNER */}
+              <div className="bg-gradient-to-r from-amber-600 to-indigo-700 rounded-2xl p-4 sm:p-5 text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
+                <div className="space-y-1 text-center sm:text-left">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white text-indigo-900 text-[10px] font-black uppercase">
+                    New Feature
+                  </div>
+                  <h3 className="text-base sm:text-lg font-bold text-white">
+                    ایڈوانسڈ اخراجات و ریئل ٹائم اینالیٹکس (Owner Expenditure Analytics)
+                  </h3>
+                  <p className="text-xs text-blue-100 max-w-xl">
+                    تمام کیٹیگریز (تنخواہیں، بجلی کا بل، کرایہ، ڈیزل، مرمت) کا گراف، چارٹس، روزانہ و ماہانہ رپورٹس اور رسیدوں کی تصویریں ریئل ٹائم میں دیکھیں۔
+                  </p>
+                </div>
+                <Link
+                  href="/dashboard/expenditure"
+                  className="px-4 py-2.5 bg-white hover:bg-slate-100 text-indigo-900 rounded-xl font-bold text-xs shadow-md transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-600" />
+                  <span>مکمل اخراجات ڈیش بورڈ کھولیں &rarr;</span>
+                </Link>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="bg-white rounded-lg p-6 shadow-md border border-slate-200 h-fit space-y-4">
                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                   <Receipt className="w-5 h-5 text-amber-600" />
@@ -3109,7 +3150,8 @@ export default function Home() {
                 </div>
               </div>
             </div>
-          )}
+          </div>
+        )}
         </main>
       </div>
     </div>

@@ -19,12 +19,14 @@ export interface SchoolProfile {
   bank_name?: string | null;
   bank_account?: string | null;
   bank_title?: string | null;
+  slug?: string | null;
   created_at?: string;
 }
 
 export interface ActiveSchoolContext {
   schoolId: string | number | null;
   schoolName: string;
+  schoolSlug: string;
   schoolAddress: string;
   schoolPhone: string;
   schoolEmail: string;
@@ -185,6 +187,13 @@ export async function resolveActiveSchoolContext(): Promise<ActiveSchoolContext>
   if (!jazzcashTitle) jazzcashTitle = selectedName;
   if (!bankTitle) bankTitle = selectedName;
 
+  const foundItem = schoolsList.find((s) => String(s.id) === String(selectedId));
+  const autoSlug = (foundItem && (foundItem as any).slug)
+    ? (foundItem as any).slug
+    : (selectedName
+        ? selectedName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-" + String(selectedId || 1).slice(0, 4)
+        : `school-${selectedId || 1}`);
+
   const schoolObj: SchoolProfile = {
     id: selectedId || 1,
     name: selectedName,
@@ -201,11 +210,13 @@ export async function resolveActiveSchoolContext(): Promise<ActiveSchoolContext>
     bank_name: bankName,
     bank_account: bankAccount,
     bank_title: bankTitle,
+    slug: autoSlug,
   };
 
   return {
     schoolId: selectedId,
     schoolName: selectedName,
+    schoolSlug: autoSlug,
     schoolAddress: selectedAddress,
     schoolPhone: selectedPhone,
     schoolEmail: selectedEmail,
