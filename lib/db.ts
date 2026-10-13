@@ -5,12 +5,14 @@ export interface ApplicationRecord {
   id: string | number;
   school_id: string | number;
   student_name: string;
+  name?: string;
   father_name: string;
   dob?: string;
   gender?: string;
   class?: string;
   desired_class?: string;
   class_name?: string;
+  class_applied?: string;
   class_applying?: string;
   previous_school?: string;
   phone: string;
@@ -23,7 +25,7 @@ export interface ApplicationRecord {
   created_at: string;
 }
 
-export const applicationsTable = {
+export const applications = {
   id: "id",
   school_id: "school_id",
   student_name: "student_name",
@@ -31,12 +33,15 @@ export const applicationsTable = {
   father_name: "father_name",
   class: "class",
   class_name: "class",
+  class_applied: "class_applied",
   phone: "phone",
   status: "status",
   source: "source",
   created_at: "created_at",
   tableName: "online_admissions",
 };
+
+export const applicationsTable = applications;
 
 export const schools = {
   id: "id",
@@ -58,18 +63,20 @@ export function asc(column: any) {
 }
 
 function normalizeRecord(row: any): ApplicationRecord {
-  const tracking = row.tracking_no || row.id || `ADM-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-  const cls = row.class || row.class_name || row.desired_class || row.class_applying || "1st";
+  const tracking = row.tracking_no || `ADM-2026-${row.id}`;
+  const cls = row.class || row.class_name || row.class_applied || row.desired_class || row.class_applying || "1st";
   return {
     id: tracking,
     tracking_no: tracking,
     school_id: row.school_id || 1,
     student_name: row.student_name || row.name || row.full_name || "New Applicant",
+    name: row.student_name || row.name || row.full_name || "New Applicant",
     father_name: row.father_name || "N/A",
     dob: row.dob || "N/A",
     gender: row.gender || "Male",
     class: cls,
     class_name: cls,
+    class_applied: cls,
     desired_class: cls,
     class_applying: cls,
     previous_school: row.previous_school || "N/A",
@@ -79,7 +86,7 @@ function normalizeRecord(row: any): ApplicationRecord {
     source: row.source || "online_link",
     status: (row.status === "approved" || row.status === "rejected") ? row.status : "pending",
     rejection_reason: row.rejection_reason,
-    created_at: row.created_at || row.applied_at || new Date().toISOString(),
+    created_at: typeof row.created_at === "string" ? row.created_at : row.created_at instanceof Date ? row.created_at.toISOString() : new Date().toISOString(),
   };
 }
 
@@ -91,7 +98,28 @@ export async function executeFreshSelect(
   const results: ApplicationRecord[] = [];
   const targetSchoolId = whereClause && whereClause.value !== undefined ? String(whereClause.value) : null;
 
-  // 1. Fetch fresh from online_admissions table in DB
+  // 1. Fetch applications stored in students table with monthly_fee = 0 (Persistent cloud store in Supabase)
+  try {
+    let q = supabase
+      .from("students")
+      .select("*")
+      .eq("monthly_fee", 0)
+      .order("created_at", { ascending: false });
+
+    if (targetSchoolId && targetSchoolId !== "all") {
+      q = q.eq("school_id", targetSchoolId);
+    }
+    const { data: sData } = await q;
+    if (sData && sData.length > 0) {
+      for (const row of sData) {
+        results.push(normalizeRecord(row));
+      }
+    }
+  } catch (err) {
+    console.warn("students select notice:", err);
+  }
+
+  // 2. Fetch from online_admissions table in DB if it exists
   try {
     let q = supabase.from("online_admissions").select("*").order("created_at", { ascending: false });
     if (targetSchoolId && targetSchoolId !== "all") {
@@ -100,14 +128,15 @@ export async function executeFreshSelect(
     const { data: oData, error: oErr } = await q;
     if (!oErr && oData && oData.length > 0) {
       for (const row of oData) {
-        results.push(normalizeRecord(row));
+        const norm = normalizeRecord(row);
+        if (!results.some((r) => String(r.id) === String(norm.id))) {
+          results.push(norm);
+        }
       }
     }
-  } catch (err) {
-    console.warn("DB select online_admissions error:", err);
-  }
+  } catch (err) {}
 
-  // 2. Fetch fresh from admission_applications table in DB
+  // 3. Fetch from admission_applications table in DB if it exists
   try {
     let q = supabase.from("admission_applications").select("*").order("created_at", { ascending: false });
     if (targetSchoolId && targetSchoolId !== "all") {
@@ -116,25 +145,6 @@ export async function executeFreshSelect(
     const { data: aData, error: aErr } = await q;
     if (!aErr && aData && aData.length > 0) {
       for (const row of aData) {
-        const norm = normalizeRecord(row);
-        if (!results.some((r) => String(r.id) === String(norm.id))) {
-          results.push(norm);
-        }
-      }
-    }
-  } catch (err) {
-    console.warn("DB select admission_applications error:", err);
-  }
-
-  // 3. Fetch fresh from admissions table in DB
-  try {
-    let q = supabase.from("admissions").select("*").order("created_at", { ascending: false });
-    if (targetSchoolId && targetSchoolId !== "all") {
-      q = q.eq("school_id", targetSchoolId);
-    }
-    const { data: admData, error: admErr } = await q;
-    if (!admErr && admData && admData.length > 0) {
-      for (const row of admData) {
         const norm = normalizeRecord(row);
         if (!results.some((r) => String(r.id) === String(norm.id))) {
           results.push(norm);
@@ -151,9 +161,9 @@ export async function executeFreshInsert(_tableName: string, values: any) {
   const inserted: ApplicationRecord[] = [];
 
   for (const raw of items) {
-    const tracking = raw.tracking_no || `ADM-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const tracking = raw.tracking_no || raw.id || `ADM-2026-${Math.floor(1000 + Math.random() * 9000)}`;
     const studentName = raw.name || raw.student_name || raw.full_name || "New Applicant";
-    const targetClass = raw.class_name || raw.class || raw.desired_class || raw.class_applying || "1st";
+    const targetClass = raw.class_applied || raw.class_name || raw.class || raw.desired_class || raw.class_applying || "1st";
 
     const record: ApplicationRecord = {
       ...raw,
@@ -161,10 +171,12 @@ export async function executeFreshInsert(_tableName: string, values: any) {
       tracking_no: tracking,
       school_id: raw.school_id || 1,
       student_name: studentName,
+      name: studentName,
       father_name: raw.father_name || "N/A",
       phone: raw.phone || "",
       class: targetClass,
       class_name: targetClass,
+      class_applied: targetClass,
       desired_class: targetClass,
       class_applying: targetClass,
       status: raw.status || "pending",
@@ -172,7 +184,26 @@ export async function executeFreshInsert(_tableName: string, values: any) {
       created_at: raw.created_at ? (raw.created_at instanceof Date ? raw.created_at.toISOString() : String(raw.created_at)) : new Date().toISOString(),
     };
 
-    // Insert into online_admissions table
+    // 1. Insert into students table with monthly_fee: 0 (Persistent cross-device cloud store)
+    try {
+      const { data: sData, error: sErr } = await supabase.from("students").insert([{
+        name: record.student_name,
+        father_name: record.father_name,
+        class: record.class,
+        phone: record.phone,
+        monthly_fee: 0,
+        school_id: String(record.school_id),
+      }]).select();
+
+      if (!sErr && sData && sData[0]) {
+        record.id = `ADM-2026-${sData[0].id}`;
+        record.tracking_no = `ADM-2026-${sData[0].id}`;
+      }
+    } catch (e) {
+      console.warn("students insert warning:", e);
+    }
+
+    // 2. Try online_admissions table
     try {
       await supabase.from("online_admissions").insert([{
         school_id: String(record.school_id),
@@ -193,7 +224,7 @@ export async function executeFreshInsert(_tableName: string, values: any) {
       }]);
     } catch (e) {}
 
-    // Insert into admission_applications table
+    // 3. Try admission_applications table
     try {
       await supabase.from("admission_applications").insert([{
         school_id: String(record.school_id),
@@ -204,18 +235,6 @@ export async function executeFreshInsert(_tableName: string, values: any) {
         tracking_no: record.tracking_no,
         status: record.status,
         created_at: record.created_at,
-      }]);
-    } catch (e) {}
-
-    // Insert into admissions table
-    try {
-      await supabase.from("admissions").insert([{
-        school_id: String(record.school_id),
-        student_name: record.student_name,
-        father_name: record.father_name,
-        class_applying: record.class,
-        phone: record.phone,
-        status: record.status,
       }]);
     } catch (e) {}
 
@@ -246,7 +265,7 @@ async function findFirstSchool(whereClause?: any) {
             .replace(/^-+|-+$/g, "");
 
           return (
-            sSlug === targetVal ||
+            (sSlug && sSlug === targetVal) ||
             sId === targetVal ||
             genSlug === targetVal ||
             targetVal.startsWith(baseNameSlug) ||
@@ -271,9 +290,9 @@ async function findFirstSchool(whereClause?: any) {
   }
 
   return {
-    id: 1,
-    name: "Registered School",
-    slug: "default",
+    id: "87137fe7-22f2-48dc-820d-f21d21b73686",
+    name: "Oxfors Academy",
+    slug: "oxfors-academy-8713",
   };
 }
 
@@ -315,7 +334,7 @@ export async function getAuth(_req?: Request) {
     user: {
       id: "default-user",
       email: "admin@school.com",
-      school_id: 1,
+      school_id: "87137fe7-22f2-48dc-820d-f21d21b73686",
     },
   };
 }
@@ -349,8 +368,14 @@ export const db = {
   insert: (table: any) => {
     const tableName = typeof table === "string" ? table : (table?.tableName || "online_admissions");
     return {
-      values: async (data: any) => {
-        return executeFreshInsert(tableName, data);
+      values: (data: any) => {
+        const executePromise = executeFreshInsert(tableName, data);
+        return Object.assign(executePromise, {
+          returning: async () => {
+            const res = await executePromise;
+            return res.records;
+          },
+        });
       },
     };
   },
@@ -358,6 +383,11 @@ export const db = {
     schools: {
       findFirst: async (options?: { where?: any }) => {
         return findFirstSchool(options?.where);
+      },
+    },
+    applications: {
+      findMany: async (options?: { where?: any; orderBy?: any }) => {
+        return executeFreshSelect("online_admissions", options?.where, options?.orderBy);
       },
     },
   },

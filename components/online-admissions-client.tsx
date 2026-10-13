@@ -203,20 +203,27 @@ export default function OnlineAdmissionsClient({
     try {
       const admNo = app.tracking_no || `ADM-2026-${Math.floor(1000 + Math.random() * 9000)}`;
 
-      // 1. Insert into students table
-      try {
-        await supabase.from("students").insert([
-          {
-            school_id: activeSchoolId === "all" ? 1 : activeSchoolId,
-            name: app.student_name,
-            father_name: app.father_name,
-            class: app.class || app.desired_class || "1st",
-            phone: app.phone,
-            monthly_fee: 2500,
-            roll_no: Math.floor(10 + Math.random() * 89),
-          },
-        ]);
-      } catch (e) {}
+      // 1. Update pending student to enrolled (monthly_fee: 2500)
+      const numId = parseInt(String(app.id).replace("ADM-2026-", ""));
+      if (!isNaN(numId)) {
+        try {
+          await supabase.from("students").update({ monthly_fee: 2500 }).eq("id", numId);
+        } catch (e) {}
+      } else {
+        try {
+          await supabase.from("students").insert([
+            {
+              school_id: activeSchoolId === "all" ? 1 : activeSchoolId,
+              name: app.student_name,
+              father_name: app.father_name,
+              class: app.class || app.desired_class || "1st",
+              phone: app.phone,
+              monthly_fee: 2500,
+              roll_no: Math.floor(10 + Math.random() * 89),
+            },
+          ]);
+        } catch (e) {}
+      }
 
       // 2. Update status in online_admissions, admission_applications, admissions
       try {
@@ -255,6 +262,13 @@ export default function OnlineAdmissionsClient({
     const reason = rejectReason.trim() || "سیٹیں مکمل ہو چکی ہیں";
 
     try {
+      const numId = parseInt(String(app.id).replace("ADM-2026-", ""));
+      if (!isNaN(numId)) {
+        try {
+          await supabase.from("students").delete().eq("id", numId);
+        } catch (e) {}
+      }
+
       try {
         await supabase.from("online_admissions").update({ status: "rejected", rejection_reason: reason }).eq("tracking_no", app.id);
       } catch (e) {}
