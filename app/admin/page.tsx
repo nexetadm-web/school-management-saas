@@ -268,33 +268,24 @@ export default function SuperAdminPage() {
   };
 
   const handleDeleteSchool = async (school: SchoolRecord) => {
-    const confirmName = prompt(
-      `CAUTION: This will permanently wipe all students, fees, teachers, and records for "${school.name}".\n\nType DELETE to confirm:`
-    );
-    if (confirmName !== "DELETE") return;
+    if (!confirm(`کیا آپ ${school.name} کو ڈیلیٹ کرنا چاہتے ہیں؟ اس کا سارا ڈیٹا ختم ہو جائے گا!`)) return;
 
     try {
-      setSchools((prev) => prev.filter((s) => s.id !== school.id));
-      setStudents((prev) => prev.filter((s) => s.school_id !== school.id));
-      setFeeRecords((prev) => prev.filter((f) => f.school_id !== school.id));
-      setTeachers((prev) => prev.filter((t) => t.school_id !== school.id));
-      setExpenses((prev) => prev.filter((e) => e.school_id !== school.id));
-      if (selectedSchool?.id === school.id) setSelectedSchool(null);
-
-      await Promise.all([
-        supabase.from("students").delete().eq("school_id", school.id),
-        supabase.from("fee_records").delete().eq("school_id", school.id),
-        supabase.from("teachers").delete().eq("school_id", school.id),
-        supabase.from("salary_records").delete().eq("school_id", school.id),
-        supabase.from("expenses").delete().eq("school_id", school.id),
-      ]);
-
-      const { error } = await supabase.from("schools").delete().eq("id", school.id);
-      if (error) throw error;
-
-      showNotification("success", `School "${school.name}" permanently removed.`);
+      const res = await fetch(`/api/super-admin/schools/${school.id}`, { method: "DELETE" });
+      if (res.ok) {
+        showNotification("success", "ڈیلیٹ ہو گیا");
+        setSchools((prev) => prev.filter((s) => s.id !== school.id));
+        setStudents((prev) => prev.filter((s) => s.school_id !== school.id));
+        setFeeRecords((prev) => prev.filter((f) => f.school_id !== school.id));
+        setTeachers((prev) => prev.filter((t) => t.school_id !== school.id));
+        setExpenses((prev) => prev.filter((e) => e.school_id !== school.id));
+        if (selectedSchool?.id === school.id) setSelectedSchool(null);
+        router.refresh();
+      } else {
+        showNotification("error", "Error - پہلے اس کے سٹوڈنٹس ڈیلیٹ کریں");
+      }
     } catch (err: any) {
-      showNotification("error", err.message || "Failed to delete school.");
+      showNotification("error", "Error - پہلے اس کے سٹوڈنٹس ڈیلیٹ کریں");
       fetchAllSaaSData();
     }
   };
@@ -382,6 +373,16 @@ export default function SuperAdminPage() {
                 <ExternalLink className="w-3 h-3" />
               </button>
             </div>
+
+            {/* Super Admin Schools Page Link */}
+            <Link
+              href="/super-admin/schools"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-200/80 bg-rose-50 hover:bg-rose-100 text-xs font-bold text-rose-700 shadow-2xs transition-all cursor-pointer"
+              title="Super Admin Schools Table"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+              <span>سکولز مینجمنٹ</span>
+            </Link>
 
             {/* Refresh Button */}
             <button
