@@ -1,67 +1,63 @@
-import { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { db, applicationsTable } from "@/lib/db";
+import { db, applicationsTable, schools, eq } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
-export const fetchCache = "force-no-store";
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
     const body = await req.json();
+    const { slug, name, student_name, father_name, phone, class_name, class: targetClass } = body;
 
-    const trackingNo = body.tracking_no || `ADM-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-    const applicationData = {
-      ...body,
-      tracking_no: trackingNo,
-      status: body.status || "pending",
-      created_at: body.created_at || new Date().toISOString(),
-    };
-
-    // Insert into DB
-    await db.insert(applicationsTable).values(applicationData);
-
-    // Revalidate paths to clear Next.js route caches immediately
-    try {
-      revalidatePath("/dashboard/admissions/online", "page");
-      revalidatePath("/dashboard/admissions", "page");
-      revalidatePath("/dashboard/online-admissions", "page");
-      revalidatePath("/admissions/online", "page");
-      revalidatePath("/admissions", "page");
-      revalidatePath("/dashboard", "page");
-    } catch (e) {
-      console.warn("revalidatePath warning:", e);
+    if (!slug) {
+      return NextResponse.json({ error: "Slug is required" }, { status: 400 });
     }
 
-    // Return with no-cache headers as requested
-    return new Response(
-      JSON.stringify({
-        success: true,
-        tracking_no: trackingNo,
-        message: "درخواست جمع ہو گئی - سکول آپ سے رابطہ کرے گا",
-      }),
-      {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-          "Pragma": "no-cache",
-          "Expires": "0",
-        },
-      }
-    );
+    // Find school by slug ONLY - This is the main fix
+    const school = await db.query.schools.findFirst({ where: eq(schools.slug, slug) });
+    if (!school) {
+      return NextResponse.json({ error: "School not found for slug " + slug }, { status: 404 });
+    }
+
+    const applicantName = name || student_name;
+    const applicantClass = class_name || targetClass || "1st";
+
+    // Use ID from slug lookup, NOT from client
+    await db.insert(applicationsTable).values({
+      school_id: school.id, // Use ID from slug lookup, NOT from client
+      name: applicantName,
+      student_name: applicantName,
+      father_name,
+      phone,
+      class_name: applicantClass,
+      class: applicantClass,
+      desired_class: applicantClass,
+      dob: body.dob || "N/A",
+      gender: body.gender || "Male",
+      previous_school: body.previous_school || "N/A",
+      address: body.address || "N/A",
+      photo_url: body.photo_url || null,
+      tracking_no: body.tracking_no,
+      status: "pending",
+      source: "online_link",
+      created_at: new Date(),
+    });
+
+    revalidatePath("/dashboard/admissions/online");
+    revalidatePath("/admissions/online");
+    revalidatePath("/dashboard");
+
+    return NextResponse.json({
+      success: true,
+      school_id: school.id,
+      school_name: school.name,
+      message: "درخواست جمع ہو گئی - سکول آپ سے رابطہ کرے گا",
+    });
   } catch (err: any) {
     console.error("API /api/apply error:", err);
-    return new Response(
-      JSON.stringify({ error: err.message || "Failed to submit application" }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store, no-cache, must-revalidate",
-          "Pragma": "no-cache",
-        },
-      }
+    return NextResponse.json(
+      { error: err.message || "Failed to process application" },
+      { status: 500 }
     );
   }
 }

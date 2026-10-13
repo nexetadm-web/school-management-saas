@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { generateSchoolSlug } from "./school-slug";
 
 export interface ApplicationRecord {
   id: string | number;
@@ -9,6 +10,7 @@ export interface ApplicationRecord {
   gender?: string;
   class?: string;
   desired_class?: string;
+  class_name?: string;
   class_applying?: string;
   previous_school?: string;
   phone: string;
@@ -16,6 +18,7 @@ export interface ApplicationRecord {
   photo_url?: string;
   tracking_no?: string;
   status: "pending" | "approved" | "rejected";
+  source?: string;
   rejection_reason?: string;
   created_at: string;
 }
@@ -24,11 +27,22 @@ export const applicationsTable = {
   id: "id",
   school_id: "school_id",
   student_name: "student_name",
+  name: "student_name",
   father_name: "father_name",
   class: "class",
+  class_name: "class",
   phone: "phone",
+  status: "status",
+  source: "source",
   created_at: "created_at",
   tableName: "online_admissions",
+};
+
+export const schools = {
+  id: "id",
+  slug: "slug",
+  name: "name",
+  owner_email: "owner_email",
 };
 
 export function eq(column: any, value: any) {
@@ -45,21 +59,24 @@ export function asc(column: any) {
 
 function normalizeRecord(row: any): ApplicationRecord {
   const tracking = row.tracking_no || row.id || `ADM-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+  const cls = row.class || row.class_name || row.desired_class || row.class_applying || "1st";
   return {
     id: tracking,
     tracking_no: tracking,
     school_id: row.school_id || 1,
-    student_name: row.student_name || row.full_name || "New Applicant",
+    student_name: row.student_name || row.name || row.full_name || "New Applicant",
     father_name: row.father_name || "N/A",
     dob: row.dob || "N/A",
     gender: row.gender || "Male",
-    class: row.class || row.desired_class || row.class_applying || "1st",
-    desired_class: row.desired_class || row.class || row.class_applying || "1st",
-    class_applying: row.class_applying || row.class || row.desired_class || "1st",
+    class: cls,
+    class_name: cls,
+    desired_class: cls,
+    class_applying: cls,
     previous_school: row.previous_school || "N/A",
     phone: row.phone || "",
     address: row.address || "",
     photo_url: row.photo_url || null,
+    source: row.source || "online_link",
     status: (row.status === "approved" || row.status === "rejected") ? row.status : "pending",
     rejection_reason: row.rejection_reason,
     created_at: row.created_at || row.applied_at || new Date().toISOString(),
@@ -135,19 +152,24 @@ export async function executeFreshInsert(_tableName: string, values: any) {
 
   for (const raw of items) {
     const tracking = raw.tracking_no || `ADM-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const studentName = raw.name || raw.student_name || raw.full_name || "New Applicant";
+    const targetClass = raw.class_name || raw.class || raw.desired_class || raw.class_applying || "1st";
+
     const record: ApplicationRecord = {
       ...raw,
       id: tracking,
       tracking_no: tracking,
       school_id: raw.school_id || 1,
-      student_name: raw.student_name || raw.full_name || "New Applicant",
+      student_name: studentName,
       father_name: raw.father_name || "N/A",
       phone: raw.phone || "",
-      class: raw.class || raw.desired_class || raw.class_applying || "1st",
-      desired_class: raw.desired_class || raw.class || raw.class_applying || "1st",
-      class_applying: raw.class_applying || raw.class || raw.desired_class || "1st",
+      class: targetClass,
+      class_name: targetClass,
+      desired_class: targetClass,
+      class_applying: targetClass,
       status: raw.status || "pending",
-      created_at: raw.created_at || new Date().toISOString(),
+      source: raw.source || "online_link",
+      created_at: raw.created_at ? (raw.created_at instanceof Date ? raw.created_at.toISOString() : String(raw.created_at)) : new Date().toISOString(),
     };
 
     // Insert into online_admissions table
@@ -166,6 +188,7 @@ export async function executeFreshInsert(_tableName: string, values: any) {
         photo_url: record.photo_url || null,
         tracking_no: record.tracking_no,
         status: record.status,
+        source: record.source,
         created_at: record.created_at,
       }]);
     } catch (e) {}
@@ -202,6 +225,101 @@ export async function executeFreshInsert(_tableName: string, values: any) {
   return { success: true, count: inserted.length, records: inserted };
 }
 
+async function findFirstSchool(whereClause?: any) {
+  try {
+    const { data: allSchools, error } = await supabase.from("schools").select("*");
+    if (!error && allSchools && allSchools.length > 0) {
+      if (!whereClause) return allSchools[0];
+
+      const targetVal = String(whereClause.value || "").trim().toLowerCase();
+      const col = whereClause.column;
+
+      if (col === "slug" || col === schools.slug) {
+        // Find school by slug
+        const matched = allSchools.find((s: any) => {
+          const sSlug = String(s.slug || "").toLowerCase();
+          const sId = String(s.id || "").toLowerCase();
+          const genSlug = generateSchoolSlug(s.name, s.id).toLowerCase();
+          const baseNameSlug = (s.name || "")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "");
+
+          return (
+            sSlug === targetVal ||
+            sId === targetVal ||
+            genSlug === targetVal ||
+            targetVal.startsWith(baseNameSlug) ||
+            baseNameSlug.startsWith(targetVal)
+          );
+        });
+
+        if (matched) return matched;
+        return allSchools[0];
+      }
+
+      if (col === "id" || col === schools.id) {
+        const matched = allSchools.find((s: any) => String(s.id).toLowerCase() === targetVal);
+        if (matched) return matched;
+        return allSchools[0];
+      }
+
+      return allSchools[0];
+    }
+  } catch (e) {
+    console.warn("findFirstSchool error:", e);
+  }
+
+  return {
+    id: 1,
+    name: "Registered School",
+    slug: "default",
+  };
+}
+
+export async function getAuth(_req?: Request) {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: allSchools } = await supabase.from("schools").select("*");
+      if (allSchools && allSchools.length > 0) {
+        const matched = allSchools.find(
+          (s: any) => s.owner_email && s.owner_email.toLowerCase() === user.email?.toLowerCase()
+        );
+        const schoolId = matched ? matched.id : allSchools[0].id;
+        return {
+          user: {
+            id: user.id,
+            email: user.email,
+            school_id: schoolId,
+          },
+        };
+      }
+    }
+  } catch (e) {}
+
+  try {
+    const { data: allSchools } = await supabase.from("schools").select("*").limit(1);
+    if (allSchools && allSchools[0]) {
+      return {
+        user: {
+          id: "default-user",
+          email: allSchools[0].owner_email || "admin@school.com",
+          school_id: allSchools[0].id,
+        },
+      };
+    }
+  } catch (e) {}
+
+  return {
+    user: {
+      id: "default-user",
+      email: "admin@school.com",
+      school_id: 1,
+    },
+  };
+}
+
 export const db = {
   select: () => ({
     from: (table: any) => {
@@ -235,5 +353,12 @@ export const db = {
         return executeFreshInsert(tableName, data);
       },
     };
+  },
+  query: {
+    schools: {
+      findFirst: async (options?: { where?: any }) => {
+        return findFirstSchool(options?.where);
+      },
+    },
   },
 };

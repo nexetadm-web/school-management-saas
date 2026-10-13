@@ -197,90 +197,48 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
 
       const trackingId = `ADM-2026-${Math.floor(1000 + Math.random() * 9000)}`;
 
-      // 1. Submit to Public API endpoint (/api/admissions/public/submit & /api/apply)
-      try {
-        const payload = {
-          slug: rawSlug,
-          school_id: schoolInfo ? String(schoolInfo.id) : "1",
-          student_name: formData.student_name,
-          father_name: formData.father_name,
-          class: formData.class_applying,
-          desired_class: formData.class_applying,
-          phone: formData.phone,
-          dob: formData.dob,
-          gender: formData.gender,
-          previous_school: formData.previous_school,
-          address: formData.address,
-          photo_url: formData.photo_url,
-          tracking_no: trackingId,
-        };
-
-        await fetch("/api/apply", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          cache: "no-store",
-          body: JSON.stringify(payload),
-        }).catch(() => {});
-
-        await fetch("/api/admissions/public/submit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          cache: "no-store",
-          body: JSON.stringify(payload),
-        }).catch(() => {});
-      } catch (apiErr) {
-        console.warn("API route submit notice:", apiErr);
-      }
-
-      // 2. Direct Supabase insert into online_admissions table
-      try {
-        await supabase.from("online_admissions").insert([
-          {
-            school_id: String(schoolInfo.id),
-            student_name: formData.student_name.trim(),
-            father_name: formData.father_name.trim(),
-            class: formData.class_applying,
-            desired_class: formData.class_applying,
-            phone: formData.phone.trim(),
-            dob: formData.dob,
-            gender: formData.gender,
-            previous_school: formData.previous_school.trim() || "N/A",
-            address: formData.address.trim() || "N/A",
-            photo_url: formData.photo_url || null,
-            tracking_no: trackingId,
-            status: "pending",
-          },
-        ]);
-      } catch (e) {}
-
-      // 3. Fallback to localStorage isolated by school_id
-      const localStoreKey = `oa_school_admissions_${schoolInfo.id}`;
-      const existing = typeof window !== "undefined" ? localStorage.getItem(localStoreKey) : null;
-      let appList = existing ? JSON.parse(existing) : [];
-      appList.unshift({
-        id: trackingId,
-        tracking_no: trackingId,
-        school_id: schoolInfo.id,
+      // 1. Submit to /api/apply sending ONLY slug, name, father_name, phone, class_name (NO client school_id)
+      const payload = {
+        slug: rawSlug,
+        name: formData.student_name.trim(),
         student_name: formData.student_name.trim(),
         father_name: formData.father_name.trim(),
-        class_applying: formData.class_applying,
-        desired_class: formData.class_applying,
         phone: formData.phone.trim(),
+        class_name: formData.class_applying,
+        class: formData.class_applying,
+        desired_class: formData.class_applying,
         dob: formData.dob,
         gender: formData.gender,
-        previous_school: formData.previous_school.trim() || "N/A",
-        address: formData.address.trim() || "N/A",
-        photo_url: formData.photo_url || null,
-        status: "pending",
-        applied_at: new Date().toISOString(),
-      });
-      if (typeof window !== "undefined") {
-        localStorage.setItem(localStoreKey, JSON.stringify(appList));
+        previous_school: formData.previous_school,
+        address: formData.address,
+        photo_url: formData.photo_url,
+        tracking_no: trackingId,
+      };
+
+      let resolvedSchoolId: any = schoolInfo?.id;
+      let resolvedSchoolName: any = schoolInfo?.name || "School";
+
+      try {
+        const res = await fetch("/api/apply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          body: JSON.stringify(payload),
+        });
+
+        if (res.ok) {
+          const apiData = await res.json();
+          if (apiData.school_id) resolvedSchoolId = apiData.school_id;
+          if (apiData.school_name) resolvedSchoolName = apiData.school_name;
+        }
+      } catch (apiErr) {
+        console.warn("API apply submit notice:", apiErr);
       }
 
       setSubmittedData({
         tracking_no: trackingId,
-        school_name: schoolInfo.name,
+        school_name: resolvedSchoolName,
+        school_id: resolvedSchoolId,
         student_name: formData.student_name.trim(),
         father_name: formData.father_name.trim(),
         class_applying: formData.class_applying,

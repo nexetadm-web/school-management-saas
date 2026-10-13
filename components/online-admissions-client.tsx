@@ -51,7 +51,7 @@ export interface ApplicationItem {
   photo_url?: string;
   status: "pending" | "approved" | "rejected";
   rejection_reason?: string;
-  created_at: string;
+  created_at: string | Date;
 }
 
 interface OnlineAdmissionsClientProps {
@@ -87,10 +87,10 @@ export default function OnlineAdmissionsClient({
     setTimeout(() => setToast(null), 4000);
   };
 
-  // AUTO POLLING: Har 10 sec me check karega with cache: 'no-store'
+  // AUTO POLLING: Har 10 sec me check karega with cache: 'no-store' (Uses auth session school_id)
   useEffect(() => {
     const fetchApps = () =>
-      fetch("/api/applications?school_id=" + activeSchoolId, { cache: "no-store" })
+      fetch("/api/applications", { cache: "no-store" })
         .then((r) => r.json())
         .then((data) => {
           if (Array.isArray(data)) {
@@ -102,7 +102,7 @@ export default function OnlineAdmissionsClient({
     fetchApps();
     const interval = setInterval(fetchApps, 10000); // Har 10 sec me check karega
     return () => clearInterval(interval);
-  }, [activeSchoolId]);
+  }, []);
 
   // Realtime subscription via Supabase for immediate sub-second notification
   useEffect(() => {
@@ -179,7 +179,7 @@ export default function OnlineAdmissionsClient({
   // Manual Refresh Handler with router.refresh() and window.location.reload()
   const handleManualRefresh = () => {
     setRefreshing(true);
-    fetch("/api/applications?school_id=" + activeSchoolId, { cache: "no-store" })
+    fetch("/api/applications", { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) setApps(data);

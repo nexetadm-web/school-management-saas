@@ -83,7 +83,7 @@ export default function AdminAdmissionsPage() {
 
       // 1. Fetch fresh from /api/applications with cache: no-store
       try {
-        const res = await fetch(`/api/applications?school_id=${sId}`, { cache: "no-store" });
+        const res = await fetch("/api/applications", { cache: "no-store" });
         if (res.ok) {
           const freshData = await res.json();
           if (Array.isArray(freshData) && freshData.length > 0) {

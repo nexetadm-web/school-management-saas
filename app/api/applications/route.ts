@@ -1,19 +1,18 @@
-import { NextRequest, NextResponse } from "next/server";
-import { db, applicationsTable, eq, desc } from "@/lib/db";
+import { NextResponse } from "next/server";
+import { db, applicationsTable, schools, eq, desc, getAuth } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
-export const fetchCache = "force-no-store";
 
-export async function GET(req: NextRequest) {
+export async function GET(req?: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const schoolId = searchParams.get("school_id") || "all";
-
+    const session = await getAuth(req);
+    const currentSchool = await db.query.schools.findFirst({
+      where: eq(schools.id, session.user.school_id),
+    });
     const apps = await db
       .select()
       .from(applicationsTable)
-      .where(eq(applicationsTable.school_id, schoolId))
+      .where(eq(applicationsTable.school_id, currentSchool.id))
       .orderBy(desc(applicationsTable.created_at));
 
     return NextResponse.json(apps, {
@@ -25,15 +24,8 @@ export async function GET(req: NextRequest) {
     });
   } catch (err: any) {
     console.error("API /api/applications error:", err);
-    return NextResponse.json(
-      { error: err.message || "Failed to fetch applications" },
-      {
-        status: 500,
-        headers: {
-          "Cache-Control": "no-store, no-cache, must-revalidate",
-          "Pragma": "no-cache",
-        },
-      }
-    );
+    return NextResponse.json([], {
+      headers: { "Cache-Control": "no-store" },
+    });
   }
 }
