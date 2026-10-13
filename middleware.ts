@@ -7,6 +7,8 @@ export function middleware(request: NextRequest) {
   // 100% PUBLIC ROUTES - NO AUTH CHECK REQUIRED
   if (
     pathname.startsWith("/apply") ||
+    pathname.startsWith("/api/apply") ||
+    pathname.startsWith("/api/applications") ||
     pathname.startsWith("/api/admissions/public") ||
     pathname.startsWith("/admission") ||
     pathname.startsWith("/_next") ||
@@ -22,6 +24,8 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     "/apply/:path*",
+    "/api/apply/:path*",
+    "/api/applications/:path*",
     "/api/admissions/public/:path*",
     "/admission/:path*",
   ],

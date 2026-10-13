@@ -81,7 +81,18 @@ export default function AdminAdmissionsPage() {
       const sId = school.id || "all";
       let appList: AdmissionApplication[] = [];
 
-      // 1. Fetch from online_admissions table
+      // 1. Fetch fresh from /api/applications with cache: no-store
+      try {
+        const res = await fetch(`/api/applications?school_id=${sId}`, { cache: "no-store" });
+        if (res.ok) {
+          const freshData = await res.json();
+          if (Array.isArray(freshData) && freshData.length > 0) {
+            appList = freshData;
+          }
+        }
+      } catch (e) {}
+
+      // 2. Fetch from online_admissions table in DB
       try {
         let oQuery = supabase.from("online_admissions").select("*").order("id", { ascending: false });
         if (sId && sId !== "all") {
@@ -278,7 +289,11 @@ export default function AdminAdmissionsPage() {
       )
       .subscribe();
 
+    // Polling every 10 seconds to guarantee fresh data on all devices
+    const interval = setInterval(loadAdmissions, 10000);
+
     return () => {
+      clearInterval(interval);
       supabase.removeChannel(channel);
     };
   }, [school.id]);

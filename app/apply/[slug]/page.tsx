@@ -197,32 +197,37 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
 
       const trackingId = `ADM-2026-${Math.floor(1000 + Math.random() * 9000)}`;
 
-      // 1. Submit to Public API endpoint (/api/admissions/public/submit)
+      // 1. Submit to Public API endpoint (/api/admissions/public/submit & /api/apply)
       try {
-        const res = await fetch("/api/admissions/public/submit", {
+        const payload = {
+          slug: rawSlug,
+          school_id: schoolInfo ? String(schoolInfo.id) : "1",
+          student_name: formData.student_name,
+          father_name: formData.father_name,
+          class: formData.class_applying,
+          desired_class: formData.class_applying,
+          phone: formData.phone,
+          dob: formData.dob,
+          gender: formData.gender,
+          previous_school: formData.previous_school,
+          address: formData.address,
+          photo_url: formData.photo_url,
+          tracking_no: trackingId,
+        };
+
+        await fetch("/api/apply", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            slug: rawSlug,
-            student_name: formData.student_name,
-            father_name: formData.father_name,
-            class: formData.class_applying,
-            desired_class: formData.class_applying,
-            phone: formData.phone,
-            dob: formData.dob,
-            gender: formData.gender,
-            previous_school: formData.previous_school,
-            address: formData.address,
-            photo_url: formData.photo_url,
-          }),
-        });
+          cache: "no-store",
+          body: JSON.stringify(payload),
+        }).catch(() => {});
 
-        if (res.ok) {
-          const apiData = await res.json();
-          if (apiData.tracking_no) {
-            // Success from API
-          }
-        }
+        await fetch("/api/admissions/public/submit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          body: JSON.stringify(payload),
+        }).catch(() => {});
       } catch (apiErr) {
         console.warn("API route submit notice:", apiErr);
       }

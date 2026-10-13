@@ -145,18 +145,43 @@ export async function POST(req: NextRequest) {
       }]);
     } catch (e) {}
 
-    return NextResponse.json({
-      success: true,
-      tracking_no: trackingNo,
-      school_id: resolvedSchool.id,
-      school_name: resolvedSchool.name,
-      message: "درخواست جمع ہو گئی - سکول آپ سے رابطہ کرے گا",
-    });
+    try {
+      const { revalidatePath } = await import("next/cache");
+      revalidatePath("/dashboard/admissions/online", "page");
+      revalidatePath("/dashboard/admissions", "page");
+      revalidatePath("/dashboard/online-admissions", "page");
+      revalidatePath("/admissions/online", "page");
+      revalidatePath("/admissions", "page");
+      revalidatePath("/dashboard", "page");
+    } catch (e) {}
+
+    return NextResponse.json(
+      {
+        success: true,
+        tracking_no: trackingNo,
+        school_id: resolvedSchool.id,
+        school_name: resolvedSchool.name,
+        message: "درخواست جمع ہو گئی - سکول آپ سے رابطہ کرے گا",
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0",
+        },
+      }
+    );
   } catch (err: any) {
     console.error("Public admission submission error:", err);
     return NextResponse.json(
       { error: err.message || "Failed to process admission application." },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+          "Pragma": "no-cache",
+        },
+      }
     );
   }
 }
