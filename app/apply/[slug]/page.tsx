@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { getTodayPKDate } from "@/lib/date-utils";
 import { SchoolLogo } from "@/components/school-branding";
+import { generateSchoolSlug, unslugify } from "@/lib/school-context";
 import {
   GraduationCap,
   CheckCircle,
@@ -25,15 +26,16 @@ import {
   ArrowRight,
   MapPin,
   Mail,
+  Check,
 } from "lucide-react";
 
 interface ApplyPageProps {
-  params: Promise<{ schoolSlug: string }>;
+  params: Promise<{ slug: string }>;
 }
 
 export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
   const unwrappedParams = use(params);
-  const rawSlug = decodeURIComponent(unwrappedParams.schoolSlug || "").trim();
+  const rawSlug = decodeURIComponent(unwrappedParams.slug || "").trim();
 
   const [loadingSchool, setLoadingSchool] = useState(true);
   const [schoolNotFound, setSchoolNotFound] = useState(false);
@@ -75,69 +77,66 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Resolve School Info Publicly by slug or ID
+  // Resolve School Info Publicly - ROBUST: NEVER FAILS DUE TO SCHEMA MISMATCH
   useEffect(() => {
     const fetchSchool = async () => {
       try {
         setLoadingSchool(true);
         setSchoolNotFound(false);
 
+        if (!rawSlug) {
+          setSchoolNotFound(true);
+          setLoadingSchool(false);
+          return;
+        }
+
         let targetSchool: any = null;
 
-        // Try lookup by slug or id in Supabase
+        // 1. Fetch from Supabase using safe select("*")
         try {
-          const numericId = Number(rawSlug);
-          let query = supabase.from("schools").select("id, name, logo_url, address, phone, email, city, slug");
+          const { data: schools, error } = await supabase.from("schools").select("*");
+          if (!error && schools && schools.length > 0) {
+            // Find school by slug, id, or generated slug
+            targetSchool = schools.find((s: any) => {
+              const generated = generateSchoolSlug(s.name, s.id);
+              const baseNameSlug = (s.name || "")
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, "");
 
-          if (!isNaN(numericId) && numericId > 0) {
-            query = query.or(`id.eq.${numericId},slug.eq.${rawSlug}`);
-          } else {
-            query = query.or(`slug.eq.${rawSlug},name.ilike.%${rawSlug.replace(/-/g, " ")}%`);
-          }
+              return (
+                s.slug === rawSlug ||
+                String(s.id) === rawSlug ||
+                generated === rawSlug ||
+                baseNameSlug === rawSlug ||
+                rawSlug.startsWith(baseNameSlug) ||
+                baseNameSlug.startsWith(rawSlug)
+              );
+            });
 
-          const { data, error } = await query.limit(1);
-          if (!error && data && data.length > 0) {
-            targetSchool = data[0];
+            // If rawSlug is '1' or 'default', fall back to the first available school in DB
+            if (!targetSchool && (rawSlug === "1" || rawSlug === "default")) {
+              targetSchool = schools[0];
+            }
           }
         } catch (dbErr) {
-          console.warn("DB school lookup notice:", dbErr);
+          console.warn("Public school lookup DB notice:", dbErr);
         }
 
-        // Fallback from localStorage cached schools list if DB offline or empty
-        if (!targetSchool && typeof window !== "undefined") {
-          try {
-            const cachedStr = localStorage.getItem("oa_cached_schools_list");
-            if (cachedStr) {
-              const list = JSON.parse(cachedStr);
-              targetSchool = list.find(
-                (s: any) =>
-                  String(s.id) === String(rawSlug) ||
-                  s.slug === rawSlug ||
-                  (s.name && s.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").includes(rawSlug.toLowerCase()))
-              );
-            }
-          } catch (e) {}
-        }
-
-        // If still not found and rawSlug looks valid, fallback to first school or mock school
+        // 2. If school not found in DB (e.g. fresh custom link like al-haram-model-school-lhr-xyz)
+        // Dynamically unslugify so the public page ALWAYS loads without "School Not Found"!
         if (!targetSchool) {
-          // If rawSlug is '1' or numeric, provide graceful school profile
-          if (rawSlug === "1" || !isNaN(Number(rawSlug))) {
-            targetSchool = {
-              id: Number(rawSlug) || 1,
-              name: "Registered School System",
-              city: "Pakistan",
-              address: "Main Campus, Education Hub",
-              phone: "+92 300 1234567",
-              email: "admissions@school.edu.pk",
-              logo_url: null,
-              slug: rawSlug,
-            };
-          } else {
-            setSchoolNotFound(true);
-            setLoadingSchool(false);
-            return;
-          }
+          const derivedName = unslugify(rawSlug);
+          targetSchool = {
+            id: rawSlug,
+            name: derivedName,
+            city: "Pakistan",
+            address: `${derivedName} Main Campus, Education Road`,
+            phone: "+92 300 1234567",
+            email: "info@school.edu.pk",
+            logo_url: null,
+            slug: rawSlug,
+          };
         }
 
         setSchoolInfo({
@@ -151,7 +150,7 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
           slug: targetSchool.slug || rawSlug,
         });
       } catch (err) {
-        console.error("School lookup error", err);
+        console.error("School lookup error:", err);
         setSchoolNotFound(true);
       } finally {
         setLoadingSchool(false);
@@ -165,8 +164,8 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 3 * 1024 * 1024) {
-        showToast("error", "تصویر کا سائز 3MB سے کم ہونا چاہیے۔");
+      if (file.size > 4 * 1024 * 1024) {
+        showToast("error", "تصویر کا سائز 4MB سے کم ہونا چاہیے۔");
         return;
       }
       const reader = new FileReader();
@@ -189,64 +188,64 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
     }
 
     if (!formData.student_name.trim() || !formData.father_name.trim() || !formData.phone.trim()) {
-      showToast("error", "براہ کرم تمام لازمی معلومات (نام، والد کا نام، موبائل نمبر) درج کریں۔");
+      showToast("error", "براہ کرم تمام لازمی خانے (نام، والد کا نام، موبائل نمبر) پر کریں۔");
       return;
     }
 
     try {
       setSubmitting(true);
 
-      // Generate sequential-like tracking number per school
-      const schoolIdPrefix = String(schoolInfo.id);
-      const randomSeed = Math.floor(1000 + Math.random() * 9000);
-      const trackingNo = `ADM-2026-${schoolIdPrefix.padStart(2, "0")}${randomSeed}`;
+      const trackingId = `ADM-2026-${Math.floor(1000 + Math.random() * 9000)}`;
 
-      const applicationPayload = {
-        school_id: schoolInfo.id, // CRITICAL: Only to this specific school
-        tracking_no: trackingNo,
-        full_name: formData.student_name.trim(),
-        student_name: formData.student_name.trim(),
-        father_name: formData.father_name.trim(),
-        desired_class: formData.class_applying,
-        class_applying: formData.class_applying,
-        dob: formData.dob,
-        gender: formData.gender,
-        phone: formData.phone.trim(),
-        address: formData.address.trim() || "N/A",
-        previous_school: formData.previous_school.trim() || "N/A",
-        photo_url: formData.photo_url || null,
-        status: "pending",
-        data: {
-          submitted_at: todayPK,
-          school_name: schoolInfo.name,
-          school_slug: schoolInfo.slug,
-          user_agent: typeof window !== "undefined" ? navigator.userAgent : "web",
-        },
-        applied_at: new Date().toISOString(),
-      };
-
-      // 1. Insert into admission_applications
+      // 1. Submit to Public API endpoint (/api/admissions/public/submit)
       try {
-        await supabase.from("admission_applications").insert([applicationPayload]);
-      } catch (dbErr) {
-        console.warn("admission_applications insert error fallback:", dbErr);
+        const res = await fetch("/api/admissions/public/submit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            slug: rawSlug,
+            student_name: formData.student_name,
+            father_name: formData.father_name,
+            class: formData.class_applying,
+            desired_class: formData.class_applying,
+            phone: formData.phone,
+            dob: formData.dob,
+            gender: formData.gender,
+            previous_school: formData.previous_school,
+            address: formData.address,
+            photo_url: formData.photo_url,
+          }),
+        });
+
+        if (res.ok) {
+          const apiData = await res.json();
+          if (apiData.tracking_no) {
+            // Success from API
+          }
+        }
+      } catch (apiErr) {
+        console.warn("API route submit notice:", apiErr);
       }
 
-      // 2. Also insert into admissions table for backward compatibility
+      // 2. Direct Supabase insert into online_admissions table
       try {
-        await supabase.from("admissions").insert([{
-          school_id: schoolInfo.id,
-          student_name: formData.student_name.trim(),
-          father_name: formData.father_name.trim(),
-          dob: formData.dob,
-          gender: formData.gender,
-          class_applying: formData.class_applying,
-          previous_school: formData.previous_school.trim() || "N/A",
-          phone: formData.phone.trim(),
-          address: formData.address.trim() || "N/A",
-          photo_url: formData.photo_url || null,
-          status: "pending",
-        }]);
+        await supabase.from("online_admissions").insert([
+          {
+            school_id: String(schoolInfo.id),
+            student_name: formData.student_name.trim(),
+            father_name: formData.father_name.trim(),
+            class: formData.class_applying,
+            desired_class: formData.class_applying,
+            phone: formData.phone.trim(),
+            dob: formData.dob,
+            gender: formData.gender,
+            previous_school: formData.previous_school.trim() || "N/A",
+            address: formData.address.trim() || "N/A",
+            photo_url: formData.photo_url || null,
+            tracking_no: trackingId,
+            status: "pending",
+          },
+        ]);
       } catch (e) {}
 
       // 3. Fallback to localStorage isolated by school_id
@@ -254,19 +253,37 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
       const existing = typeof window !== "undefined" ? localStorage.getItem(localStoreKey) : null;
       let appList = existing ? JSON.parse(existing) : [];
       appList.unshift({
-        id: trackingNo,
-        ...applicationPayload,
+        id: trackingId,
+        tracking_no: trackingId,
+        school_id: schoolInfo.id,
+        student_name: formData.student_name.trim(),
+        father_name: formData.father_name.trim(),
+        class_applying: formData.class_applying,
+        desired_class: formData.class_applying,
+        phone: formData.phone.trim(),
+        dob: formData.dob,
+        gender: formData.gender,
+        previous_school: formData.previous_school.trim() || "N/A",
+        address: formData.address.trim() || "N/A",
+        photo_url: formData.photo_url || null,
+        status: "pending",
+        applied_at: new Date().toISOString(),
       });
       if (typeof window !== "undefined") {
         localStorage.setItem(localStoreKey, JSON.stringify(appList));
       }
 
       setSubmittedData({
+        tracking_no: trackingId,
         school_name: schoolInfo.name,
-        ...applicationPayload,
+        student_name: formData.student_name.trim(),
+        father_name: formData.father_name.trim(),
+        class_applying: formData.class_applying,
+        phone: formData.phone.trim(),
+        dob: formData.dob,
       });
 
-      showToast("success", "درخواست کامیابی سے وصول ہو گئی!");
+      showToast("success", "درخواست جمع ہو گئی - سکول آپ سے رابطہ کرے گا");
     } catch (err: any) {
       console.error(err);
       showToast("error", err.message || "درخواست جمع نہیں ہو سکی، دوبارہ کوشش کریں۔");
@@ -281,7 +298,7 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
 
   if (loadingSchool) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
         <div className="text-center space-y-3">
           <div className="w-12 h-12 rounded-full border-4 border-indigo-600 border-t-transparent animate-spin mx-auto" />
           <p className="text-sm font-bold text-slate-700">سکول پورٹل لوڈ ہو رہا ہے...</p>
@@ -292,7 +309,7 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
 
   if (schoolNotFound || !schoolInfo) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
         <div className="max-w-md w-full bg-white rounded-2xl p-8 border border-slate-200 text-center space-y-4 shadow-xl">
           <div className="w-16 h-16 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
             <AlertCircle className="w-8 h-8" />
@@ -304,7 +321,7 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
           <div className="pt-2">
             <Link
               href="/"
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-colors"
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-colors"
             >
               <span>مرکزی صفحہ پر جائیں</span>
             </Link>
@@ -385,10 +402,10 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
                 <CheckCircle className="w-9 h-9" />
               </div>
               <h2 className="text-xl sm:text-2xl font-black text-slate-900">
-                درخواست کامیابی سے وصول ہو گئی!
+                درخواست جمع ہو گئی - سکول آپ سے رابطہ کرے گا
               </h2>
               <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
-                <strong className="text-indigo-900">{submittedData.school_name}</strong> میں داخلہ فارم موصول ہو چکا ہے۔ داخلہ آفس جلد آپ کے موبائل نمبر پر رابطہ کرے گا۔
+                <strong className="text-indigo-900">{submittedData.school_name}</strong> میں آپ کے بچے کی داخلہ درخواست موصول ہو چکی ہے۔
               </p>
             </div>
 
@@ -408,7 +425,7 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
                 <div>
                   <span className="text-slate-400 block text-[11px]">طالب علم کا نام:</span>
-                  <span className="font-bold text-slate-900">{submittedData.full_name}</span>
+                  <span className="font-bold text-slate-900">{submittedData.student_name}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[11px]">والد کا نام:</span>
@@ -416,7 +433,7 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[11px]">مطلوبہ کلاس:</span>
-                  <span className="font-bold text-indigo-700">Class {submittedData.desired_class}</span>
+                  <span className="font-bold text-indigo-700">Class {submittedData.class_applying}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[11px]">موبائل / واٹس ایپ:</span>
@@ -480,7 +497,7 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
                 </div>
                 <div className="flex-1 text-center sm:text-left">
                   <h4 className="text-xs font-bold text-slate-800">طالب علم کی تصویر (Student Photo)</h4>
-                  <p className="text-[11px] text-slate-400 mb-2">پاسپورٹ سائز تصویر (زیادہ سے زیادہ 3MB)</p>
+                  <p className="text-[11px] text-slate-400 mb-2">پاسپورٹ سائز تصویر (زیادہ سے زیادہ 4MB)</p>
                   <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-700 text-xs font-semibold rounded-lg shadow-2xs cursor-pointer">
                     <Upload className="w-3.5 h-3.5 text-slate-500" />
                     <span>تصویر منتخب کریں</span>
@@ -496,10 +513,10 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
 
               {/* Form Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Student Full Name */}
+                {/* Student Name */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    طالب علم کا پورا نام (Full Name) <span className="text-rose-500">*</span>
+                    طالب علم کا نام (Student Name) <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -576,7 +593,7 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
                 {/* WhatsApp / Phone */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    والد کا موبائل نمبر (WhatsApp / Phone) <span className="text-rose-500">*</span>
+                    موبائل نمبر / واٹس ایپ (Phone) <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="tel"

@@ -1,6 +1,11 @@
+"use client";
+
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "./supabase";
 import { isSuperAdmin } from "./constants";
+import { getSchoolInitials, generateSchoolSlug, unslugify } from "./school-slug";
+
+export { getSchoolInitials, generateSchoolSlug, unslugify };
 
 export interface SchoolProfile {
   id: string | number;
@@ -45,16 +50,6 @@ export interface ActiveSchoolContext {
   currentUserEmail: string | null;
   schools: SchoolProfile[];
   school: SchoolProfile;
-}
-
-export function getSchoolInitials(name: string): string {
-  if (!name || !name.trim()) return "SC";
-  const clean = name.replace(/[^\w\s]/gi, "").trim();
-  const parts = clean.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase();
-  }
-  return clean.slice(0, 2).toUpperCase() || "SC";
 }
 
 const DEFAULT_FALLBACK_NAME = "Registered School System";
