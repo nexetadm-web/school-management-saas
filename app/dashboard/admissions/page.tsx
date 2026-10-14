@@ -28,6 +28,7 @@ import {
 
 export interface AdmissionRecord {
   id?: string | number;
+  admission_no?: string;
   application_no?: string;
   student_name: string;
   father_name: string;
@@ -70,12 +71,12 @@ export default function DashboardAdmissionsPage() {
         .select("*")
         .order("created_at", { ascending: false });
 
-      console.log("Dashboard fetch:", data, error);
+      console.log("Dashboard fetch from admissions:", data, error);
 
       let list: AdmissionRecord[] = (data as AdmissionRecord[]) || [];
 
       // Resilient fallback: If admissions table has 0 rows or is not created in Supabase yet,
-      // load from /api/applications or localStorage so user never loses submissions.
+      // load from /api/applications so user never loses submissions.
       if (list.length === 0) {
         try {
           const res = await fetch("/api/applications", { cache: "no-store" });
@@ -84,12 +85,14 @@ export default function DashboardAdmissionsPage() {
             if (Array.isArray(apiData) && apiData.length > 0) {
               list = apiData.map((item: any) => ({
                 id: item.id || item.tracking_no,
-                application_no: item.tracking_no || item.id,
+                admission_no: item.admission_no || item.tracking_no || item.id,
+                application_no: item.admission_no || item.tracking_no || item.id,
                 student_name: item.student_name || item.name,
                 father_name: item.father_name,
                 dob: item.dob,
                 phone: item.phone,
                 class_apply: item.class_applied || item.class_name || item.class,
+                class: item.class_applied || item.class_name || item.class,
                 address: item.address,
                 status: item.status || "pending",
                 created_at: item.created_at,
@@ -100,20 +103,6 @@ export default function DashboardAdmissionsPage() {
         } catch (e) {
           console.warn("API fallback notice:", e);
         }
-      }
-
-      // Check localStorage for offline/client fallback
-      if (list.length === 0 && typeof window !== "undefined") {
-        try {
-          const localKey = `oa_school_admissions_${school?.id || 1}`;
-          const localStr = localStorage.getItem(localKey);
-          if (localStr) {
-            const parsed = JSON.parse(localStr);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              list = parsed;
-            }
-          }
-        } catch (e) {}
       }
 
       console.log("Total Applications loaded:", list.length, list);
@@ -150,7 +139,7 @@ export default function DashboardAdmissionsPage() {
         const sName = (app.student_name || "").toLowerCase();
         const fName = (app.father_name || "").toLowerCase();
         const phone = (app.phone || "").toLowerCase();
-        const appNo = (app.application_no || String(app.id || "")).toLowerCase();
+        const appNo = (app.admission_no || app.application_no || String(app.id || "")).toLowerCase();
         const cls = (app.class_apply || app.class || "").toLowerCase();
         return sName.includes(q) || fName.includes(q) || phone.includes(q) || appNo.includes(q) || cls.includes(q);
       }
@@ -159,25 +148,37 @@ export default function DashboardAdmissionsPage() {
     });
   }, [applications, activeTab, searchQuery]);
 
-  // Copy Admission Link
-  const handleCopyLink = () => {
+  // Public Link generation strictly with school_id
+  const getPublicLink = () => {
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const link = `${origin}/admission?school=${school?.id || 1}`;
-    navigator.clipboard.writeText(link);
+    const currentSchoolId = school?.id || "1";
+    return `${origin}/admission-form?school_id=${currentSchoolId}`;
+  };
+
+  // Copy Admission Link handler
+  const handleCopyLink = () => {
+    const publicLink = getPublicLink();
+    navigator.clipboard.writeText(publicLink);
     setCopiedLink(true);
-    showToast("success", `آن لائن داخلہ فارم کا لنک کاپی ہو گیا: ${link}`);
+    showToast("success", "Link copied! اس لنک کو کسی بھی ڈیوائس پر کھولا جا سکتا ہے");
     setTimeout(() => setCopiedLink(false), 2500);
+  };
+
+  // Open Public Form handler
+  const handleOpenPublicForm = () => {
+    const publicLink = getPublicLink();
+    window.open(publicLink, "_blank");
   };
 
   // Status Update: Approve / Reject
   const handleStatusChange = async (app: AdmissionRecord, newStatus: "approved" | "rejected" | "pending") => {
     try {
       console.log(`Updating status for ${app.student_name} to ${newStatus}`);
-      const targetId = app.id || app.application_no;
+      const targetId = app.id || app.admission_no || app.application_no;
 
       setApplications((prev) =>
         prev.map((item) =>
-          (item.id === targetId || item.application_no === targetId)
+          item.id === targetId || item.admission_no === targetId || item.application_no === targetId
             ? { ...item, status: newStatus }
             : item
         )
@@ -188,12 +189,12 @@ export default function DashboardAdmissionsPage() {
         await supabase
           .from("admissions")
           .update({ status: newStatus })
-          .or(`id.eq.${targetId},application_no.eq.${targetId}`);
+          .or(`id.eq.${targetId},admission_no.eq.${targetId},application_no.eq.${targetId}`);
       } catch (dbErr) {
         console.warn("DB update notice:", dbErr);
       }
 
-      // If approved, also optionally create student in students table
+      // If approved, create student row
       if (newStatus === "approved") {
         try {
           await supabase.from("students").insert([{
@@ -218,20 +219,21 @@ export default function DashboardAdmissionsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-16 font-sans">
-      {/* Top Navbar */}
+      {/* 1. HEADER: flex-col on mobile, flex-row on md */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 sm:px-8 py-3.5 shadow-2xs">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          {/* Left Brand Area */}
+          <div className="flex items-center gap-3 justify-between md:justify-start">
             <Link
               href="/dashboard"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer border border-slate-200"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer border border-slate-200 shrink-0"
             >
               <ArrowLeft className="w-4 h-4 text-slate-500" />
               <span>ڈیش بورڈ</span>
             </Link>
 
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 font-bold">
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 font-bold shrink-0">
                 <UserPlus className="w-5 h-5" />
               </div>
               <div>
@@ -241,48 +243,47 @@ export default function DashboardAdmissionsPage() {
                     ADMISSIONS
                   </span>
                 </h1>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-slate-500 hidden sm:block">
                   سکول پورٹل اور پبلک لنک سے موصول ہونے والی داخلہ درخواستیں
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Quick Actions: Copy Link & Refresh */}
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          {/* Right Buttons: w-full on mobile, md:w-auto, text-sm, py-2.5, rounded-xl */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
             <button
               onClick={handleCopyLink}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-xs transition-all cursor-pointer"
+              className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-xs transition-all cursor-pointer"
               title="Copy Public Admission Link"
             >
-              {copiedLink ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+              {copiedLink ? <Check className="w-4 h-4 text-white" /> : <Copy className="w-4 h-4" />}
               <span>{copiedLink ? "لنک کاپی ہو گیا!" : "داخلہ فارم کا لنک کاپی کریں"}</span>
             </button>
 
-            <Link
-              href="/admission"
-              target="_blank"
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl shadow-2xs transition-colors"
+            <button
+              onClick={handleOpenPublicForm}
+              className="w-full md:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs sm:text-sm font-semibold bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl shadow-2xs transition-colors cursor-pointer"
               title="Open Public Admission Form"
             >
               <span>پبلک فارم کھولیں</span>
-              <ExternalLink className="w-3 h-3 text-slate-500" />
-            </Link>
+              <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+            </button>
 
             <button
               onClick={fetchAdmissions}
               disabled={loading}
-              className="p-2 text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-all cursor-pointer shadow-2xs"
+              className="p-2.5 text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-all cursor-pointer shadow-2xs hidden sm:flex items-center justify-center shrink-0"
               title="Refresh List"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-indigo-600" : ""}`} />
+              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-indigo-600" : ""}`} />
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-8 pt-6 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-8 pt-5 space-y-5">
         {/* Toast Alert */}
         {toastMessage && (
           <div
@@ -306,98 +307,254 @@ export default function DashboardAdmissionsPage() {
           </div>
         )}
 
-        {/* REQUIREMENT 4: DEBUG COUNTER ON DASHBOARD TOP */}
-        <div className="bg-white border border-indigo-100 rounded-2xl p-4 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-gradient-to-r from-white via-indigo-50/20 to-white">
-          <div className="flex items-center gap-2.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs font-bold text-slate-700">
-              Total Applications: <strong className="text-indigo-600 text-sm">{applications.length}</strong>
-            </span>
-            <span className="text-slate-300">|</span>
-            <span className="text-xs text-amber-700 font-medium">
-              Pending (زیر غور): <strong>{pendingCount}</strong>
-            </span>
-            <span className="text-slate-300">|</span>
-            <span className="text-xs text-emerald-700 font-medium">
-              Approved (منظور شدہ): <strong>{approvedCount}</strong>
-            </span>
+        {/* 2. STATS ROW: grid-cols-1 md:grid-cols-3 gap-3, each card p-3 */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* Card 1: Total */}
+          <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200 shadow-2xs flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold text-slate-500">Total Applications (کل درخواستیں)</p>
+              <h3 className="text-xl sm:text-2xl font-black text-indigo-600 mt-0.5">{applications.length}</h3>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+              <UserPlus className="w-5 h-5" />
+            </div>
           </div>
 
-          <div className="text-[11px] font-mono text-slate-500 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200">
-            Source: Supabase <strong className="text-slate-800">public.admissions</strong> table
+          {/* Card 2: Pending */}
+          <div className="bg-white rounded-2xl p-3 sm:p-4 border border-amber-200 shadow-2xs flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold text-amber-700">Pending (زیر غور درخواستیں)</p>
+              <h3 className="text-xl sm:text-2xl font-black text-amber-600 mt-0.5">{pendingCount}</h3>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0">
+              <Clock className="w-5 h-5" />
+            </div>
+          </div>
+
+          {/* Card 3: Approved */}
+          <div className="bg-white rounded-2xl p-3 sm:p-4 border border-emerald-200 shadow-2xs flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold text-emerald-700">Approved (منظور شدہ داخلے)</p>
+              <h3 className="text-xl sm:text-2xl font-black text-emerald-600 mt-0.5">{approvedCount}</h3>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0">
+              <CheckCircle className="w-5 h-5" />
+            </div>
           </div>
         </div>
 
-        {/* TABS & SEARCH BAR */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-          {/* Tabs: All | Pending (Default) | Approved */}
-          <div className="inline-flex p-1 bg-slate-200/80 rounded-2xl gap-1">
-            <button
-              onClick={() => setActiveTab("pending")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === "pending"
-                  ? "bg-amber-400 text-slate-900 shadow-sm"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
-              }`}
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span>Pending (زیر غور)</span>
-              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-white/70 font-black">
-                {pendingCount}
-              </span>
-            </button>
+        {/* 3. TABS & 5. SEARCH INPUT: overflow-x-auto scrollbar-hide, flex-nowrap */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          {/* Tabs: overflow-x-auto scrollbar-hide, flex-nowrap, gap-2, pb-2, min-w-max */}
+          <div className="w-full md:w-auto overflow-x-auto scrollbar-hide pb-1">
+            <div className="inline-flex flex-nowrap p-1 bg-slate-200/80 rounded-2xl gap-2 min-w-max">
+              <button
+                onClick={() => setActiveTab("pending")}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === "pending"
+                    ? "bg-amber-400 text-slate-900 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Pending (زیر غور)</span>
+                <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-white/70 font-black">
+                  {pendingCount}
+                </span>
+              </button>
 
-            <button
-              onClick={() => setActiveTab("approved")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === "approved"
-                  ? "bg-emerald-600 text-white shadow-sm"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
-              }`}
-            >
-              <CheckCircle className="w-3.5 h-3.5" />
-              <span>Approved (منظور شدہ)</span>
-              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-700 text-white font-black">
-                {approvedCount}
-              </span>
-            </button>
+              <button
+                onClick={() => setActiveTab("approved")}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === "approved"
+                    ? "bg-emerald-600 text-white shadow-sm"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                }`}
+              >
+                <CheckCircle className="w-3.5 h-3.5" />
+                <span>Approved (منظور شدہ)</span>
+                <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-700 text-white font-black">
+                  {approvedCount}
+                </span>
+              </button>
 
-            <button
-              onClick={() => setActiveTab("all")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === "all"
-                  ? "bg-indigo-600 text-white shadow-sm"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
-              }`}
-            >
-              <Filter className="w-3.5 h-3.5" />
-              <span>All (تمام درخواستیں)</span>
-              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-700 text-white font-black">
-                {totalCount}
-              </span>
-            </button>
+              <button
+                onClick={() => setActiveTab("all")}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === "all"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                }`}
+              >
+                <Filter className="w-3.5 h-3.5" />
+                <span>All (تمام درخواستیں)</span>
+                <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-700 text-white font-black">
+                  {totalCount}
+                </span>
+              </button>
+            </div>
           </div>
 
-          {/* Search Input */}
-          <div className="relative w-full sm:w-72">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          {/* 5. Search input: w-full, h-11, rounded-xl */}
+          <div className="relative w-full md:w-80">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="طالب علم کا نام، فون یا رول نمبر..."
+              placeholder="طالب علم کا نام، فون یا داخلہ نمبر..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-300 rounded-xl outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-900 shadow-2xs"
+              className="w-full pl-10 pr-4 h-11 text-xs sm:text-sm bg-white border border-slate-300 rounded-xl outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-900 shadow-2xs"
             />
           </div>
         </div>
 
-        {/* ADMISSIONS TABLE & CARDS */}
-        <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs">
-          <div className="overflow-x-auto">
+        {/* 4. TABLE -> CARDS ON MOBILE (Most Important) */}
+
+        {/* A: MOBILE CARDS VIEW (<md) */}
+        <div className="md:hidden space-y-3">
+          {loading ? (
+            <div className="bg-white rounded-2xl p-8 border border-slate-200 text-center text-slate-500">
+              <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-600" />
+              <span>درخواستیں لوڈ ہو رہی ہیں...</span>
+            </div>
+          ) : filteredApplications.length === 0 ? (
+            <div className="bg-white rounded-2xl p-8 border border-slate-200 text-center text-slate-400">
+              <UserPlus className="w-8 h-8 mx-auto mb-2 opacity-40 text-slate-400" />
+              <p className="font-semibold text-slate-600 text-sm">کوئی درخواست موجود نہیں ہے</p>
+              <p className="text-[11px] text-slate-400 mt-1">
+                پبلک فارم لنک شیئر کریں تاکہ آن لائن درخواستیں موصول ہوں۔
+              </p>
+            </div>
+          ) : (
+            filteredApplications.map((app, idx) => {
+              const status = (app.status || "pending").toLowerCase();
+              const appNo = app.admission_no || app.application_no || `ADM-${app.id || idx + 1}`;
+              const targetClass = app.class_apply || app.class || app.class_name || "1st";
+
+              return (
+                <div
+                  key={app.id || idx}
+                  className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3"
+                >
+                  {/* Card Top: Admission No + Status Badge */}
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                    <span className="font-mono font-black text-xs text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100">
+                      {appNo}
+                    </span>
+
+                    {status === "pending" ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                        <Clock className="w-3 h-3 text-amber-600" />
+                        <span>Pending</span>
+                      </span>
+                    ) : status === "approved" ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        <CheckCircle className="w-3 h-3 text-emerald-600" />
+                        <span>Approved</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                        <XCircle className="w-3 h-3 text-rose-600" />
+                        <span>Rejected</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Student & Father Info */}
+                  <div className="space-y-1 text-right">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 font-bold text-xs border border-slate-200">
+                        کلاس {targetClass}
+                      </span>
+                      <h3 className="font-black text-slate-900 text-base">
+                        {app.student_name}
+                      </h3>
+                    </div>
+
+                    <p className="text-xs text-slate-500">
+                      ولدیت: <strong className="text-slate-800">{app.father_name}</strong>
+                    </p>
+
+                    {app.address && (
+                      <p className="text-[11px] text-slate-400 truncate">
+                        پتہ: {app.address}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Phone & Date */}
+                  <div className="flex items-center justify-between pt-1 text-xs text-slate-600 border-t border-slate-100">
+                    <span className="font-mono text-[11px] text-slate-400">
+                      {app.created_at ? new Date(app.created_at).toLocaleDateString("en-PK") : "Today"}
+                    </span>
+
+                    <div className="flex items-center gap-1.5 font-mono">
+                      <Phone className="w-3.5 h-3.5 text-slate-400" />
+                      <span>{app.phone}</span>
+                      {app.phone && (
+                        <a
+                          href={`https://wa.me/${app.phone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
+                            `السلام علیکم! ${school?.name || "School"} سے آپ کی داخلہ درخواست (${app.student_name}، کلاس ${targetClass}) موصول ہوئی ہے۔`
+                          )}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-1.5 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors ml-1"
+                          title="Send WhatsApp Message"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions Full Width on Mobile */}
+                  <div className="flex items-center gap-2 pt-1">
+                    {status === "pending" && (
+                      <>
+                        <button
+                          onClick={() => handleStatusChange(app, "approved")}
+                          className="flex-1 py-2.5 px-3 text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs transition-colors cursor-pointer text-center flex items-center justify-center gap-1.5"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          <span>منظور کریں (Approve)</span>
+                        </button>
+                        <button
+                          onClick={() => handleStatusChange(app, "rejected")}
+                          className="py-2.5 px-3 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors cursor-pointer text-center"
+                        >
+                          مسترد
+                        </button>
+                      </>
+                    )}
+
+                    {status === "approved" && (
+                      <div className="w-full py-2 bg-emerald-50 border border-emerald-200 rounded-xl text-center text-xs font-bold text-emerald-700">
+                        داخلہ منظور شدہ ہے
+                      </div>
+                    )}
+
+                    {status === "rejected" && (
+                      <button
+                        onClick={() => handleStatusChange(app, "pending")}
+                        className="w-full py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl text-center text-xs font-bold text-slate-700"
+                      >
+                        دوبارہ زیر غور لائیں (Reset)
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* B: DESKTOP TABLE VIEW (hidden on mobile, visible on md+) */}
+        <div className="hidden md:block bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs">
+          <div className="overflow-x-auto -webkit-overflow-scrolling-touch">
             <table className="w-full text-right text-xs text-slate-700">
               <thead className="bg-slate-100/80 text-slate-600 uppercase text-[11px] font-bold border-b border-slate-200">
                 <tr>
-                  <th className="px-4 py-3.5 text-center">درخواست نمبر</th>
+                  <th className="px-4 py-3.5 text-center">داخلہ نمبر</th>
                   <th className="px-4 py-3.5">طالب علم کا نام</th>
                   <th className="px-4 py-3.5">والد کا نام</th>
                   <th className="px-4 py-3.5 text-center">کلاس</th>
@@ -428,7 +585,7 @@ export default function DashboardAdmissionsPage() {
                 ) : (
                   filteredApplications.map((app, idx) => {
                     const status = (app.status || "pending").toLowerCase();
-                    const appNo = app.application_no || `ADM-${app.id || idx + 1}`;
+                    const appNo = app.admission_no || app.application_no || `ADM-${app.id || idx + 1}`;
                     const targetClass = app.class_apply || app.class || app.class_name || "1st";
 
                     return (
@@ -483,7 +640,7 @@ export default function DashboardAdmissionsPage() {
                           </div>
                         </td>
 
-                        {/* REQUIREMENT 3: BADGES - Pending = yellow, Approved = green */}
+                        {/* Badges: Pending = yellow, Approved = green */}
                         <td className="px-4 py-3.5 text-center">
                           {status === "pending" ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-2xs">

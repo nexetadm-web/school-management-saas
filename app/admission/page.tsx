@@ -25,7 +25,7 @@ import {
 
 function AdmissionFormContent() {
   const searchParams = useSearchParams();
-  const schoolParam = searchParams.get("school");
+  const schoolParam = searchParams.get("school_id") || searchParams.get("schoolId") || searchParams.get("school");
 
   const [loadingSchool, setLoadingSchool] = useState(true);
   const [submitting, setSubmitting] = useState(false);
