@@ -143,7 +143,32 @@ function AdmissionFormContent() {
         created_at: new Date().toISOString(),
       };
 
-      // 1. Try Supabase insert
+      // 1. Submit to /api/admission/submit API
+      try {
+        const res = await fetch("/api/admission/submit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          body: JSON.stringify({
+            student_name: formData.student_name.trim(),
+            father_name: formData.father_name.trim(),
+            dob: formData.dob,
+            phone: formData.phone.trim(),
+            class: formData.class_applying,
+            class_apply: formData.class_applying,
+            address: formData.address.trim() || "N/A",
+            school_id: schoolInfo.id,
+            status: "pending",
+            application_no: trackingId,
+          }),
+        });
+        const resJson = await res.json();
+        console.log("Admission submit API response:", resJson);
+      } catch (apiErr) {
+        console.warn("API submission notice:", apiErr);
+      }
+
+      // 2. Direct Supabase insert
       try {
         await supabase.from("admissions").insert([admissionRecord]);
       } catch (dbErr) {

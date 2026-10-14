@@ -98,6 +98,24 @@ export async function executeFreshSelect(
   const results: ApplicationRecord[] = [];
   const targetSchoolId = whereClause && whereClause.value !== undefined ? String(whereClause.value) : null;
 
+  // 0. Fetch applications directly from admissions table
+  try {
+    let q = supabase
+      .from("admissions")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (targetSchoolId && targetSchoolId !== "all") {
+      q = q.eq("school_id", targetSchoolId);
+    }
+    const { data: admData, error: admErr } = await q;
+    if (!admErr && admData && admData.length > 0) {
+      for (const row of admData) {
+        results.push(normalizeRecord(row));
+      }
+    }
+  } catch (err) {}
+
   // 1. Fetch applications stored in students table with monthly_fee = 0 (Persistent cloud store in Supabase)
   try {
     let q = supabase
@@ -203,7 +221,25 @@ export async function executeFreshInsert(_tableName: string, values: any) {
       console.warn("students insert warning:", e);
     }
 
-    // 2. Try online_admissions table
+    // 2. Insert into admissions table
+    try {
+      await supabase.from("admissions").insert([{
+        school_id: String(record.school_id),
+        student_name: record.student_name,
+        father_name: record.father_name,
+        class_apply: record.class,
+        class: record.class,
+        phone: record.phone,
+        dob: record.dob || "N/A",
+        gender: record.gender || "Male",
+        address: record.address || "N/A",
+        application_no: record.tracking_no,
+        status: record.status,
+        created_at: record.created_at,
+      }]);
+    } catch (e) {}
+
+    // 3. Try online_admissions table
     try {
       await supabase.from("online_admissions").insert([{
         school_id: String(record.school_id),
