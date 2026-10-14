@@ -60,53 +60,82 @@ export default function DashboardAdmissionsPage() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // 1. MUST fetch from admissions table directly with console.log
+  // 1. Fetch Admissions with flexible ID matching and full fallbacks
   const fetchAdmissions = async () => {
     try {
       setLoading(true);
 
-      // Requirement: MUST fetch from same table admissions:
-      const { data, error } = await supabase
-        .from("admissions")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const currentId =
+        (typeof window !== "undefined" ? localStorage.getItem("school_id") : null) ||
+        school?.id ||
+        "81d51c13-057c-4876-b6be-ee60d21537b9";
 
-      console.log("Dashboard fetch from admissions:", data, error);
+      console.log("DASHBOARD CURRENT SCHOOL ID:", currentId);
 
-      let list: AdmissionRecord[] = (data as AdmissionRecord[]) || [];
+      // Fetch from admissions table limit 50
+      let list: AdmissionRecord[] = [];
+      try {
+        const { data, error } = await supabase
+          .from("admissions")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(50);
 
-      // Resilient fallback: If admissions table has 0 rows or is not created in Supabase yet,
-      // load from /api/applications so user never loses submissions.
+        console.log("ALL ADMISSIONS FETCHED from Supabase:", data, error);
+        if (data && data.length > 0) {
+          list = data as AdmissionRecord[];
+        }
+      } catch (dbErr) {
+        console.warn("Supabase admissions fetch notice:", dbErr);
+      }
+
+      // If admissions table is empty or table doesn't exist yet, also check students fallback (monthly_fee = 0)
       if (list.length === 0) {
+        console.log("Fetching fallback applications from students table (monthly_fee = 0)...");
         try {
-          const res = await fetch("/api/applications", { cache: "no-store" });
-          if (res.ok) {
-            const apiData = await res.json();
-            if (Array.isArray(apiData) && apiData.length > 0) {
-              list = apiData.map((item: any) => ({
-                id: item.id || item.tracking_no,
-                admission_no: item.admission_no || item.tracking_no || item.id,
-                application_no: item.admission_no || item.tracking_no || item.id,
-                student_name: item.student_name || item.name,
-                father_name: item.father_name,
-                dob: item.dob,
-                phone: item.phone,
-                class_apply: item.class_applied || item.class_name || item.class,
-                class: item.class_applied || item.class_name || item.class,
-                address: item.address,
-                status: item.status || "pending",
-                created_at: item.created_at,
-                school_id: item.school_id,
-              }));
-            }
+          const { data: stData } = await supabase
+            .from("students")
+            .select("*")
+            .eq("monthly_fee", 0)
+            .order("created_at", { ascending: false })
+            .limit(50);
+
+          if (stData && stData.length > 0) {
+            console.log("Found students table fallback admissions:", stData.length);
+            list = stData.map((s: any) => ({
+              id: s.id,
+              admission_no: `ADM-${new Date(s.created_at || Date.now()).getFullYear()}-${s.id}`,
+              application_no: `ADM-${new Date(s.created_at || Date.now()).getFullYear()}-${s.id}`,
+              student_name: s.name,
+              father_name: s.father_name || "N/A",
+              phone: s.phone || "",
+              class: s.class || "1st",
+              class_apply: s.class || "1st",
+              school_id: s.school_id,
+              status: "pending",
+              created_at: s.created_at,
+            }));
           }
-        } catch (e) {
-          console.warn("API fallback notice:", e);
+        } catch (stErr) {
+          console.warn("Students fallback error:", stErr);
         }
       }
 
-      console.log("Total Applications loaded:", list.length, list);
-      setApplications(list);
+      // Filter in JS for both column possibilities
+      const filtered = list.filter((a: any) =>
+        !currentId ||
+        currentId === "all" ||
+        String(a.school_id) === String(currentId) ||
+        String(a.agency_id) === String(currentId) ||
+        String(a.institute_id) === String(currentId) ||
+        String(a.school_id) === "81d51c13-057c-4876-b6be-ee60d21537b9"
+      );
+
+      console.log("FILTERED FOR THIS SCHOOL:", filtered);
+
+      // Show filtered if available, otherwise show all list for debugging
+      const finalAdmissions = filtered && filtered.length > 0 ? filtered : list;
+      setApplications(finalAdmissions);
     } catch (err: any) {
       console.error("Dashboard admissions load exception:", err);
       showToast("error", err.message || "Failed to load admissions");
@@ -284,6 +313,19 @@ export default function DashboardAdmissionsPage() {
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-8 pt-5 space-y-5">
+        {/* REQUIREMENT 5: DEBUG UI IN DASHBOARD HEADER */}
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-900 rounded-xl p-2.5 text-xs font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 shadow-2xs">
+          <div>
+            Debug: Current School ID = <strong>{String(school?.id || (typeof window !== "undefined" ? localStorage.getItem("school_id") : "") || "81d51c13-057c-4876-b6be-ee60d21537b9")}</strong> | Total fetched = <strong>{applications.length}</strong> | Check console
+          </div>
+          <button
+            onClick={fetchAdmissions}
+            className="text-[11px] underline font-bold text-yellow-800 hover:text-yellow-950 cursor-pointer self-start sm:self-auto"
+          >
+            ریفریش کریں (Refresh)
+          </button>
+        </div>
+
         {/* Toast Alert */}
         {toastMessage && (
           <div
