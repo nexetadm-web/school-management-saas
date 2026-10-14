@@ -86,6 +86,11 @@ function AdmissionFormContent() {
             phone: s.phone || "+92 300 1234567",
             logo_url: s.logo_url || null,
           });
+        } else if (schoolParam) {
+          setSchoolInfo((prev) => ({
+            ...prev,
+            id: schoolParam as any,
+          }));
         }
       } catch (err) {
         console.error("School lookup error", err);

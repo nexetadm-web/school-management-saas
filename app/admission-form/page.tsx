@@ -18,24 +18,20 @@ import {
   School,
   MapPin,
   RefreshCw,
-  Share2,
 } from "lucide-react";
 
 function AdmissionFormComponent() {
   const searchParams = useSearchParams();
-  const rawSchoolId = searchParams.get("school_id") || searchParams.get("schoolId") || searchParams.get("school");
+  const rawSchoolId =
+    searchParams.get("school_id") ||
+    searchParams.get("schoolId") ||
+    searchParams.get("school");
 
-  // School ID stored strictly in STATE, never in localStorage
+  // State
   const [schoolId, setSchoolId] = useState<string | null>(rawSchoolId);
-  const [loadingSchool, setLoadingSchool] = useState(true);
-  const [schoolData, setSchoolData] = useState<{
-    id: string;
-    name: string;
-    city?: string;
-    phone?: string;
-    address?: string;
-    logo_url?: string;
-  } | null>(null);
+  const [isValidLink, setIsValidLink] = useState<boolean>(true);
+  const [schoolName, setSchoolName] = useState<string>("Online School Admission");
+  const [schoolCity, setSchoolCity] = useState<string | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -58,68 +54,75 @@ function AdmissionFormComponent() {
     date: string;
   } | null>(null);
 
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Fetch school by school_id strictly from URL
+  // 1. NON-BLOCKING URL SCHOOL ID RESOLUTION
   useEffect(() => {
-    if (!rawSchoolId) {
+    const id = (rawSchoolId || "").trim();
+    console.log("Admission form school_id from URL:", id);
+
+    // Allow ANY UUID format (/^[0-9a-f-]{36}$/i) or any ID with length > 5
+    const isUuid = /^[0-9a-f-]{36}$/i.test(id);
+    const hasValidLength = id.length >= 5;
+
+    if (!id || (!isUuid && !hasValidLength)) {
       setSchoolId(null);
-      setLoadingSchool(false);
+      setIsValidLink(false);
       return;
     }
 
-    setSchoolId(rawSchoolId);
+    // ALWAYS allow the form to open if school_id is in URL!
+    setSchoolId(id);
+    setIsValidLink(true);
 
-    const fetchSchoolInfo = async () => {
+    // Try to fetch school details from DB without blocking form
+    const fetchSchoolDetails = async () => {
       try {
-        setLoadingSchool(true);
-        setErrorMessage(null);
+        // Check BOTH tables: schools AND agencies
+        let resolvedName = "Online School Admission";
+        let resolvedCity = null;
 
-        // Fetch school by id
-        const { data, error } = await supabase
-          .from("schools")
-          .select("*")
-          .eq("id", rawSchoolId)
-          .single();
+        try {
+          const { data: schoolData } = await supabase
+            .from("schools")
+            .select("school_name, name, city")
+            .eq("id", id)
+            .maybeSingle();
 
-        if (error || !data) {
-          // If single fails, try fallback without single in case of string/number casting
-          const { data: list } = await supabase.from("schools").select("*");
-          const found = list?.find(
-            (s: any) => String(s.id).toLowerCase() === String(rawSchoolId).toLowerCase()
-          );
-
-          if (found) {
-            setSchoolData({
-              id: String(found.id),
-              name: found.name || "School",
-              city: found.city || "Pakistan",
-              phone: found.phone || "",
-              address: found.address || "",
-              logo_url: found.logo_url || null,
-            });
+          if (schoolData) {
+            resolvedName =
+              (schoolData as any).school_name ||
+              (schoolData as any).name ||
+              resolvedName;
+            resolvedCity = (schoolData as any).city || null;
           } else {
-            setErrorMessage("Invalid admission link. Please get correct link from school.");
+            // Check agencies table
+            try {
+              const { data: agencyData } = await supabase
+                .from("agencies")
+                .select("agency_name, name, city")
+                .eq("id", id)
+                .maybeSingle();
+
+              if (agencyData) {
+                resolvedName =
+                  (agencyData as any).agency_name ||
+                  (agencyData as any).name ||
+                  resolvedName;
+                resolvedCity = (agencyData as any).city || null;
+              }
+            } catch (aErr) {}
           }
-        } else {
-          setSchoolData({
-            id: String(data.id),
-            name: data.name || "School",
-            city: data.city || "Pakistan",
-            phone: data.phone || "",
-            address: data.address || "",
-            logo_url: data.logo_url || null,
-          });
-        }
-      } catch (err) {
-        console.error("School fetch error:", err);
-        setErrorMessage("Invalid admission link. Please get correct link from school.");
-      } finally {
-        setLoadingSchool(false);
+        } catch (sErr) {}
+
+        setSchoolName(resolvedName);
+        if (resolvedCity) setSchoolCity(resolvedCity);
+      } catch (e) {
+        console.log("School fetch notice, continuing with form:", e);
       }
     };
 
-    fetchSchoolInfo();
+    fetchSchoolDetails();
   }, [rawSchoolId]);
 
   // Form Submission
@@ -127,7 +130,7 @@ function AdmissionFormComponent() {
     e.preventDefault();
 
     if (!schoolId) {
-      setErrorMessage("School ID missing - use valid public link");
+      alert("غلط داخلہ فارم لنک! براہ کرم درست لنک استعمال کریں۔");
       return;
     }
 
@@ -138,7 +141,7 @@ function AdmissionFormComponent() {
 
     try {
       setSubmitting(true);
-      setErrorMessage(null);
+      setSubmitError(null);
 
       const payload = {
         student_name: formData.student_name.trim(),
@@ -150,7 +153,8 @@ function AdmissionFormComponent() {
         school_id: schoolId,
       };
 
-      const res = await fetch("/api/admissions/submit", {
+      // Call API
+      const res = await fetch("/api/admissions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
@@ -160,7 +164,7 @@ function AdmissionFormComponent() {
       const resData = await res.json();
 
       if (!res.ok || !resData.success) {
-        throw new Error(resData.error || "درخواست جمع کرنے میں ناکامی ہوئی");
+        throw new Error(resData.error || "درخواست جمع کرنے میں مسئلہ پیش آیا");
       }
 
       setSubmittedAdmission({
@@ -169,19 +173,19 @@ function AdmissionFormComponent() {
         father_name: formData.father_name.trim(),
         class: formData.class,
         phone: formData.phone.trim(),
-        school_name: schoolData?.name || "School",
+        school_name: schoolName,
         date: new Date().toLocaleDateString("en-PK"),
       });
     } catch (err: any) {
       console.error("Submission failed:", err);
-      setErrorMessage(err.message || "Failed to submit admission form");
+      setSubmitError(err.message || "Failed to submit admission form");
     } finally {
       setSubmitting(false);
     }
   };
 
-  // If no school_id in URL or school not found
-  if (!loadingSchool && (!schoolId || errorMessage)) {
+  // If no school_id in URL at all
+  if (!isValidLink || !schoolId) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xl text-center space-y-4">
@@ -307,18 +311,26 @@ function AdmissionFormComponent() {
               </span>
 
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-2">
-                {schoolData?.name || "School Admission Portal"}
+                {schoolName}
               </h1>
 
-              {schoolData?.city && (
+              {schoolCity && (
                 <p className="text-xs text-slate-500 flex items-center justify-center gap-1 mt-1">
                   <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                  <span>{schoolData.city}</span>
+                  <span>{schoolCity}</span>
                 </p>
               )}
             </div>
           </div>
         </div>
+
+        {/* Error Alert */}
+        {submitError && (
+          <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-semibold flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{submitError}</span>
+          </div>
+        )}
 
         {/* Admission Form */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm">
