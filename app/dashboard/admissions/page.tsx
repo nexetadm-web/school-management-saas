@@ -262,9 +262,12 @@ export default function DashboardAdmissionsPage() {
 
   // 4. Public Link generation strictly with Supabase school_id
   const getPublicLink = (targetId?: string | null) => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const activeId = targetId || currentSchoolId || school?.id || "";
-    return `${origin}/admission-form?school_id=${activeId}`;
+    const origin =
+      typeof window !== "undefined" && window.location.origin
+        ? window.location.origin
+        : "https://school-management-saas-iota.vercel.app";
+    const activeId = targetId || currentSchoolId || school?.id || "87137fe7-22f2-48dc-820d-f21d21b73686";
+    return `${origin}/apply/${activeId}`;
   };
 
   // Copy Admission Link handler

@@ -54,6 +54,10 @@ export function eq(column: any, value: any) {
   return { type: "eq", column, value };
 }
 
+export function or(...conditions: any[]) {
+  return { type: "or", conditions };
+}
+
 export function desc(column: any) {
   return { type: "desc", column };
 }

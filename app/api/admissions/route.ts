@@ -81,6 +81,26 @@ export async function POST(req: Request) {
 
     console.log("INSERT RESULT:", data, error);
 
+    // 2.5 Also insert into online_admissions table for multi-view sync
+    try {
+      await supabaseAdmin.from("online_admissions").insert([
+        {
+          tracking_no: admission_no,
+          school_id: String(school_id),
+          student_name,
+          father_name,
+          phone,
+          class: student_class,
+          desired_class: student_class,
+          dob,
+          address,
+          status: "pending",
+        },
+      ]);
+    } catch (onlErr) {
+      console.warn("Online admissions mirror insert notice:", onlErr);
+    }
+
     // 3. Resilient persistent store in students table (with monthly_fee: 0) so admission is NEVER lost!
     try {
       const { error: sErr } = await supabaseAdmin.from("students").insert([{

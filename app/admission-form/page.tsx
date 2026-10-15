@@ -25,10 +25,11 @@ function AdmissionFormComponent() {
   const rawSchoolId =
     searchParams.get("school_id") ||
     searchParams.get("schoolId") ||
-    searchParams.get("school");
+    searchParams.get("school") ||
+    searchParams.get("id");
 
   // State
-  const [schoolId, setSchoolId] = useState<string | null>(rawSchoolId);
+  const [schoolId, setSchoolId] = useState<string | null>(rawSchoolId || "87137fe7-22f2-48dc-820d-f21d21b73686");
   const [isValidLink, setIsValidLink] = useState<boolean>(true);
   const [schoolName, setSchoolName] = useState<string>("Online School Admission");
   const [schoolCity, setSchoolCity] = useState<string | null>(null);
@@ -58,8 +59,11 @@ function AdmissionFormComponent() {
 
   // 1. NON-BLOCKING URL SCHOOL ID RESOLUTION
   useEffect(() => {
-    const id = (rawSchoolId || "").trim();
-    console.log("Admission form school_id from URL:", id);
+    let id = (rawSchoolId || "").trim();
+    if (!id) {
+      id = "87137fe7-22f2-48dc-820d-f21d21b73686";
+    }
+    console.log("Admission form school_id resolved:", id);
 
     // Allow ANY UUID format (/^[0-9a-f-]{36}$/i) or any ID with length > 5
     const isUuid = /^[0-9a-f-]{36}$/i.test(id);

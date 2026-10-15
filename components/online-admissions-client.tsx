@@ -154,7 +154,7 @@ export default function OnlineAdmissionsClient({
   const schoolSlug = school.slug || generateSchoolSlug(school.name, school.id || activeSchoolId);
   const origin = typeof window !== "undefined" && window.location.origin
     ? window.location.origin
-    : "https://s-iota.vercel.app";
+    : "https://school-management-saas-iota.vercel.app";
   const publicLink = `${origin}/apply/${schoolSlug}`;
 
   useEffect(() => {

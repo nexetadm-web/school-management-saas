@@ -25,7 +25,12 @@ import {
 
 function AdmissionFormContent() {
   const searchParams = useSearchParams();
-  const schoolParam = searchParams.get("school_id") || searchParams.get("schoolId") || searchParams.get("school");
+  const schoolParam =
+    searchParams.get("school_id") ||
+    searchParams.get("schoolId") ||
+    searchParams.get("school") ||
+    searchParams.get("id") ||
+    "87137fe7-22f2-48dc-820d-f21d21b73686";
 
   const [loadingSchool, setLoadingSchool] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -33,10 +38,10 @@ function AdmissionFormContent() {
 
   // Dynamic School Details
   const [schoolInfo, setSchoolInfo] = useState({
-    id: 1,
+    id: schoolParam || "87137fe7-22f2-48dc-820d-f21d21b73686",
     name: "OA Smart School System",
-    city: "Sillanwali",
-    address: "Main Campus, Education Hub, Sillanwali Road",
+    city: "Pakistan",
+    address: "Main Campus, Education Road",
     phone: "+92 300 1234567",
     logo_url: null as string | null,
   });
@@ -173,12 +178,30 @@ function AdmissionFormContent() {
         console.warn("API submission notice:", apiErr);
       }
 
-      // 2. Direct Supabase insert
+      // 2. Direct Supabase insert into admissions AND online_admissions
       try {
         await supabase.from("admissions").insert([admissionRecord]);
       } catch (dbErr) {
         console.warn("Direct Supabase admissions insert fallback:", dbErr);
       }
+
+      try {
+        await supabase.from("online_admissions").insert([{
+          tracking_no: trackingId,
+          school_id: schoolInfo.id,
+          student_name: formData.student_name.trim(),
+          father_name: formData.father_name.trim(),
+          dob: formData.dob,
+          gender: formData.gender,
+          class: formData.class_applying,
+          desired_class: formData.class_applying,
+          previous_school: formData.previous_school.trim() || "N/A",
+          phone: formData.phone.trim(),
+          address: formData.address.trim() || "N/A",
+          photo_url: formData.photo_url || null,
+          status: "pending",
+        }]);
+      } catch (dbErr) {}
 
       // 2. LocalStorage persistence fallback for admin access
       const localStoreKey = `oa_school_admissions_${schoolInfo.id}`;

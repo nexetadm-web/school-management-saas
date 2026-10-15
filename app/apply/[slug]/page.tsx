@@ -92,35 +92,55 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
 
         let targetSchool: any = null;
 
-        // 1. Fetch from Supabase using safe select("*")
+        // 1. Direct fetch from Supabase by ID or slug
         try {
-          const { data: schools, error } = await supabase.from("schools").select("*");
-          if (!error && schools && schools.length > 0) {
-            // Find school by slug, id, or generated slug
-            targetSchool = schools.find((s: any) => {
-              const generated = generateSchoolSlug(s.name, s.id);
-              const baseNameSlug = (s.name || "")
-                .toLowerCase()
-                .replace(/[^a-z0-9]+/g, "-")
-                .replace(/^-+|-+$/g, "");
-
-              return (
-                s.slug === rawSlug ||
-                String(s.id) === rawSlug ||
-                generated === rawSlug ||
-                baseNameSlug === rawSlug ||
-                rawSlug.startsWith(baseNameSlug) ||
-                baseNameSlug.startsWith(rawSlug)
-              );
-            });
-
-            // If rawSlug is '1' or 'default', fall back to the first available school in DB
-            if (!targetSchool && (rawSlug === "1" || rawSlug === "default")) {
-              targetSchool = schools[0];
-            }
+          const isUuid = /^[0-9a-f-]{36}$/i.test(rawSlug);
+          let q = supabase.from("schools").select("*");
+          if (isUuid) {
+            q = q.eq("id", rawSlug);
+          } else {
+            q = q.or(`slug.eq.${rawSlug},id.eq.${rawSlug}`);
           }
-        } catch (dbErr) {
-          console.warn("Public school lookup DB notice:", dbErr);
+          const { data: directSchool } = await q.maybeSingle();
+          if (directSchool) {
+            targetSchool = {
+              ...directSchool,
+              name: (directSchool as any).school_name || directSchool.name,
+            };
+          }
+        } catch (dirErr) {
+          console.warn("Direct lookup notice:", dirErr);
+        }
+
+        // 2. Fetch from Supabase using safe select("*") if not directly found
+        if (!targetSchool) {
+          try {
+            const { data: schools, error } = await supabase.from("schools").select("*");
+            if (!error && schools && schools.length > 0) {
+              targetSchool = schools.find((s: any) => {
+                const generated = generateSchoolSlug(s.name, s.id);
+                const baseNameSlug = (s.name || "")
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]+/g, "-")
+                  .replace(/^-+|-+$/g, "");
+
+                return (
+                  s.slug === rawSlug ||
+                  String(s.id) === rawSlug ||
+                  generated === rawSlug ||
+                  baseNameSlug === rawSlug ||
+                  rawSlug.startsWith(baseNameSlug) ||
+                  baseNameSlug.startsWith(rawSlug)
+                );
+              });
+
+              if (!targetSchool && (rawSlug === "1" || rawSlug === "default")) {
+                targetSchool = schools[0];
+              }
+            }
+          } catch (dbErr) {
+            console.warn("Public school lookup DB notice:", dbErr);
+          }
         }
 
         // 2. If school not found in DB (e.g. fresh custom link like al-haram-model-school-lhr-xyz)
@@ -234,6 +254,47 @@ export default function PublicApplySchoolPage({ params }: ApplyPageProps) {
       } catch (apiErr) {
         console.warn("API apply submit notice:", apiErr);
       }
+
+      // 2. Also submit to /api/admissions for guaranteed Supabase insertion
+      try {
+        await fetch("/api/admissions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          body: JSON.stringify({
+            school_id: resolvedSchoolId,
+            student_name: formData.student_name.trim(),
+            father_name: formData.father_name.trim(),
+            phone: formData.phone.trim(),
+            class: formData.class_applying,
+            dob: formData.dob,
+            address: formData.address,
+            gender: formData.gender,
+            tracking_no: trackingId,
+          }),
+        });
+      } catch (e) {}
+
+      // 3. Direct client-side insert into online_admissions via Supabase anon
+      try {
+        await supabase.from("online_admissions").insert([
+          {
+            tracking_no: trackingId,
+            school_id: resolvedSchoolId,
+            student_name: formData.student_name.trim(),
+            father_name: formData.father_name.trim(),
+            dob: formData.dob,
+            gender: formData.gender,
+            class: formData.class_applying,
+            desired_class: formData.class_applying,
+            previous_school: formData.previous_school,
+            phone: formData.phone.trim(),
+            address: formData.address,
+            photo_url: formData.photo_url,
+            status: "pending",
+          },
+        ]);
+      } catch (e) {}
 
       setSubmittedData({
         tracking_no: trackingId,
