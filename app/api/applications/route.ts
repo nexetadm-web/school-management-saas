@@ -3,11 +3,19 @@ import { db, applications, eq, desc, getAuth } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const paramSchoolId = searchParams.get("school_id");
     const session = await getAuth();
-    // Get current logged in school_id from session, not from param
-    const schoolId = session.user.school_id;
+    const schoolId = paramSchoolId || session.user.school_id;
+
+    if (!schoolId) {
+      return NextResponse.json([], {
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+
     const apps = await db.query.applications.findMany({
       where: eq(applications.school_id, schoolId),
       orderBy: desc(applications.created_at),

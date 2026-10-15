@@ -98,12 +98,16 @@ export default function SuperAdminPage() {
 
         setCurrentUser(user);
 
-        // Load stored impersonated school from localStorage
+        // EMERGENCY CLEAR: Nuke any stored school id from localStorage
         if (typeof window !== "undefined") {
-          const stored = localStorage.getItem("oa_superadmin_selected_school_id");
-          if (stored) {
-            setActiveSwitcherSchoolId(stored);
-          }
+          try {
+            localStorage.removeItem("oa_superadmin_selected_school_id");
+            localStorage.removeItem("oa_superadmin_selected_school_name");
+            localStorage.removeItem("oa_active_school_context_cache");
+            localStorage.removeItem("school_id");
+            localStorage.removeItem("active_school_id");
+            localStorage.removeItem("current_school_id");
+          } catch (e) {}
         }
 
         await fetchAllSaaSData();

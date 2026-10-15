@@ -70,9 +70,12 @@ export default function AttendancePage() {
       setSchoolContext(ctx);
 
       let query = supabase.from("students").select("*").order("name", { ascending: true });
-      if (ctx.schoolId && ctx.schoolId !== "all") {
-        query = query.eq("school_id", ctx.schoolId);
+      if (!ctx.schoolId) {
+        setStudents([]);
+        setLoading(false);
+        return;
       }
+      query = query.eq("school_id", ctx.schoolId);
 
       const { data, error } = await query;
       if (error) throw error;

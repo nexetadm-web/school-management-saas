@@ -259,6 +259,8 @@ export default function HomeworkPage() {
           .eq("class", formClass);
         if (sId && sId !== "all") {
           stQuery = stQuery.eq("school_id", sId);
+        } else {
+          stQuery = stQuery.eq("school_id", "none");
         }
         const { data: stData } = await stQuery;
         if (stData && stData.length > 0) {

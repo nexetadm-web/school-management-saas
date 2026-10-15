@@ -145,7 +145,11 @@ export default function FTFRegisterPage() {
       // 1. Fetch Students from DB to calculate real student counts per class
       try {
         let stuQuery = supabase.from("students").select("class, school_id");
-        if (ctx?.schoolId) stuQuery = stuQuery.eq("school_id", ctx.schoolId);
+        if (ctx?.schoolId) {
+          stuQuery = stuQuery.eq("school_id", ctx.schoolId);
+        } else {
+          stuQuery = stuQuery.eq("school_id", "none");
+        }
         const { data: studentsData } = await stuQuery;
 
         if (studentsData && studentsData.length > 0) {

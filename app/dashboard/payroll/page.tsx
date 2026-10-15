@@ -152,15 +152,16 @@ export default function StaffPayrollPage() {
   const handleAutoGeneratePayroll = async () => {
     try {
       setGenerating(true);
-      const sId = school.id || 1;
+      const sId = school.id;
+      if (!sId) {
+        setGenerating(false);
+        return;
+      }
 
-      // 1. Fetch teachers from DB or fallback
+      // 1. Fetch teachers from DB strictly filtered by school_id
       let staffMembers: Array<{ id: number | string; name: string; phone?: string; monthly_salary?: number; designation?: string }> = [];
       try {
-        let tQuery = supabase.from("teachers").select("*");
-        if (sId && sId !== "all") {
-          tQuery = tQuery.eq("school_id", sId);
-        }
+        let tQuery = supabase.from("teachers").select("*").eq("school_id", sId);
         const { data, error } = await tQuery;
         if (!error && data && data.length > 0) {
           staffMembers = data;

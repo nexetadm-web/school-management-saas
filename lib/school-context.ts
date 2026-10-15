@@ -52,6 +52,8 @@ export interface ActiveSchoolContext {
   school: SchoolProfile;
 }
 
+import { getCurrentSchool } from "./getCurrentSchool";
+
 const DEFAULT_FALLBACK_NAME = "Registered School System";
 const EVENT_NAME = "oa-school-changed";
 
@@ -107,13 +109,26 @@ export async function resolveActiveSchoolContext(): Promise<ActiveSchoolContext>
   let bankAccount = "PK00HABB0000001234567890";
   let bankTitle = "";
 
-  if (typeof window !== "undefined") {
-    const storedId = localStorage.getItem("oa_superadmin_selected_school_id");
-    const storedName = localStorage.getItem("oa_superadmin_selected_school_name");
-    if (storedId) selectedId = storedId;
-    if (storedName) selectedName = storedName;
+  // 1. Single source of truth: resolve strictly via Supabase auth & DB
+  const { schoolId: authSchoolId, schoolName: authSchoolName } = await getCurrentSchool();
+  if (authSchoolId) {
+    selectedId = authSchoolId;
+    selectedName = authSchoolName;
   }
 
+  // EMERGENCY CLEAR: Nuke any stored school id from localStorage
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem("oa_superadmin_selected_school_id");
+      localStorage.removeItem("oa_superadmin_selected_school_name");
+      localStorage.removeItem("oa_active_school_context_cache");
+      localStorage.removeItem("school_id");
+      localStorage.removeItem("active_school_id");
+      localStorage.removeItem("current_school_id");
+    } catch (e) {}
+  }
+
+  // 2. Fallback matching if not resolved yet
   if (!selectedId) {
     if (userEmail) {
       const matched = schoolsList.find(
@@ -124,9 +139,9 @@ export async function resolveActiveSchoolContext(): Promise<ActiveSchoolContext>
         selectedName = matched.name;
       }
     }
-    if (!selectedId && schoolsList.length > 0) {
-      selectedId = isSuper ? "all" : schoolsList[0].id;
-      selectedName = isSuper ? "All Schools (Aggregated View)" : schoolsList[0].name;
+    if (!selectedId && isSuper && schoolsList.length > 0) {
+      selectedId = "all";
+      selectedName = "All Schools (Aggregated View)";
     }
   }
 
@@ -247,22 +262,21 @@ export function broadcastSchoolUpdate(ctx: ActiveSchoolContext) {
  */
 export function useSchool() {
   const [context, setContext] = useState<ActiveSchoolContext>(() => {
-    // Synchronous initial cache read for instant <10ms rendering
+    // EMERGENCY CLEAR: Nuke any stored school id from localStorage on hook init
     if (typeof window !== "undefined") {
       try {
-        const cached = localStorage.getItem("oa_active_school_context_cache");
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          return {
-            ...parsed,
-            schoolInitials: getSchoolInitials(parsed.schoolName),
-          };
-        }
+        localStorage.removeItem("oa_superadmin_selected_school_id");
+        localStorage.removeItem("oa_active_school_context_cache");
+        localStorage.removeItem("school_id");
+        localStorage.removeItem("active_school_id");
+        localStorage.removeItem("current_school_id");
+        localStorage.removeItem("oa_superadmin_selected_school_name");
       } catch (e) {}
     }
     return {
       schoolId: null,
       schoolName: DEFAULT_FALLBACK_NAME,
+      schoolSlug: "registered-school",
       schoolAddress: "School Campus",
       schoolPhone: "",
       schoolEmail: "",
@@ -292,9 +306,6 @@ export function useSchool() {
     const res = await resolveActiveSchoolContext();
     setContext(res);
     setLoading(false);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("oa_active_school_context_cache", JSON.stringify(res));
-    }
     return res;
   }, []);
 

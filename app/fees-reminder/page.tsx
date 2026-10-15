@@ -77,10 +77,14 @@ export default function FeesReminderPage() {
         .select("*, students(id, name, class, father_name, phone)")
         .neq("status", "paid");
 
-      if (ctx.schoolId && ctx.schoolId !== "all") {
-        studentsQuery = studentsQuery.eq("school_id", ctx.schoolId);
-        feeQuery = feeQuery.eq("school_id", ctx.schoolId);
+      if (!ctx.schoolId) {
+        setUnpaidFees([]);
+        setLoading(false);
+        return;
       }
+
+      studentsQuery = studentsQuery.eq("school_id", ctx.schoolId);
+      feeQuery = feeQuery.eq("school_id", ctx.schoolId);
 
       const [studentsRes, feesRes] = await Promise.all([studentsQuery, feeQuery]);
 

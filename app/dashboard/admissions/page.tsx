@@ -44,6 +44,8 @@ export interface AdmissionRecord {
   school_id?: string | number;
 }
 
+import { getCurrentSchoolId } from "@/lib/getCurrentSchool";
+
 export default function DashboardAdmissionsPage() {
   const router = useRouter();
   const { school } = useSchool();
@@ -54,88 +56,144 @@ export default function DashboardAdmissionsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [copiedLink, setCopiedLink] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [currentSchoolId, setCurrentSchoolId] = useState<string | null>(null);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
   const showToast = (type: "success" | "error", text: string) => {
     setToastMessage({ type, text });
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // 1. Fetch Admissions with flexible ID matching and full fallbacks
+  // Emergency cleanup of fake IDs on page load
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("oa_superadmin_selected_school_id");
+        localStorage.removeItem("oa_superadmin_selected_school_name");
+        localStorage.removeItem("oa_active_school_context_cache");
+        localStorage.removeItem("school_id");
+        localStorage.removeItem("active_school_id");
+        localStorage.removeItem("current_school_id");
+      } catch (e) {}
+    }
+  }, []);
+
+  // 1. Fetch Admissions strictly filtered by currentSchoolId
   const fetchAdmissions = async () => {
     try {
       setLoading(true);
 
-      const currentId =
-        (typeof window !== "undefined" ? localStorage.getItem("school_id") : null) ||
-        school?.id ||
-        "81d51c13-057c-4876-b6be-ee60d21537b9";
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email) {
+        setCurrentUserEmail(user.email);
+      }
 
-      console.log("DASHBOARD CURRENT SCHOOL ID:", currentId);
+      const currentId = await getCurrentSchoolId();
+      console.log("FETCHING FOR SCHOOL:", currentId);
+      if (currentId) {
+        setCurrentSchoolId(currentId);
+      }
 
-      // Fetch from admissions table limit 50
+      // If no school ID resolved, NEVER fetch cross-tenant data! Return empty.
+      if (!currentId) {
+        setApplications([]);
+        return;
+      }
+
       let list: AdmissionRecord[] = [];
+
+      // 1. Query online_admissions table strictly by school_id
       try {
-        const { data, error } = await supabase
-          .from("admissions")
+        const { data: onlData, error: onlErr } = await supabase
+          .from("online_admissions")
           .select("*")
-          .order("created_at", { ascending: false })
-          .limit(50);
+          .eq("school_id", currentId)
+          .order("created_at", { ascending: false });
 
-        console.log("ALL ADMISSIONS FETCHED from Supabase:", data, error);
-        if (data && data.length > 0) {
-          list = data as AdmissionRecord[];
-        }
-      } catch (dbErr) {
-        console.warn("Supabase admissions fetch notice:", dbErr);
-      }
-
-      // If admissions table is empty or table doesn't exist yet, also check students fallback (monthly_fee = 0)
-      if (list.length === 0) {
-        console.log("Fetching fallback applications from students table (monthly_fee = 0)...");
-        try {
-          const { data: stData } = await supabase
-            .from("students")
-            .select("*")
-            .eq("monthly_fee", 0)
-            .order("created_at", { ascending: false })
-            .limit(50);
-
-          if (stData && stData.length > 0) {
-            console.log("Found students table fallback admissions:", stData.length);
-            list = stData.map((s: any) => ({
-              id: s.id,
-              admission_no: `ADM-${new Date(s.created_at || Date.now()).getFullYear()}-${s.id}`,
-              application_no: `ADM-${new Date(s.created_at || Date.now()).getFullYear()}-${s.id}`,
-              student_name: s.name,
-              father_name: s.father_name || "N/A",
-              phone: s.phone || "",
-              class: s.class || "1st",
-              class_apply: s.class || "1st",
-              school_id: s.school_id,
-              status: "pending",
-              created_at: s.created_at,
-            }));
+        if (!onlErr && onlData && onlData.length > 0) {
+          for (const row of onlData) {
+            const key = String(row.tracking_no || row.id);
+            if (!list.some((r) => String(r.id) === key || r.admission_no === key || r.application_no === key)) {
+              list.push({
+                id: row.tracking_no || row.id,
+                admission_no: row.tracking_no || `ADM-${row.id}`,
+                application_no: row.tracking_no || `ADM-${row.id}`,
+                student_name: row.student_name,
+                father_name: row.father_name || "N/A",
+                phone: row.phone || "",
+                class: row.class || "1st",
+                class_apply: row.class || "1st",
+                school_id: row.school_id,
+                status: row.status || "pending",
+                created_at: row.created_at,
+              });
+            }
           }
-        } catch (stErr) {
-          console.warn("Students fallback error:", stErr);
         }
-      }
+      } catch (e) {}
 
-      // Filter in JS for both column possibilities
-      const filtered = list.filter((a: any) =>
-        !currentId ||
-        currentId === "all" ||
-        String(a.school_id) === String(currentId) ||
-        String(a.agency_id) === String(currentId) ||
-        String(a.institute_id) === String(currentId) ||
-        String(a.school_id) === "81d51c13-057c-4876-b6be-ee60d21537b9"
-      );
+      // 2. Try online_admissions table
+      try {
+        const { data: onlData, error: onlErr } = await supabase
+          .from("online_admissions")
+          .select("*")
+          .eq("school_id", currentId)
+          .order("created_at", { ascending: false });
 
-      console.log("FILTERED FOR THIS SCHOOL:", filtered);
+        if (!onlErr && onlData && onlData.length > 0) {
+          for (const row of onlData) {
+            const key = String(row.tracking_no || row.id);
+            if (!list.some((r) => String(r.id) === key || r.admission_no === key || r.application_no === key)) {
+              list.push({
+                id: row.tracking_no || row.id,
+                admission_no: row.tracking_no || `ADM-${row.id}`,
+                application_no: row.tracking_no || `ADM-${row.id}`,
+                student_name: row.student_name,
+                father_name: row.father_name || "N/A",
+                phone: row.phone || "",
+                class: row.class || "1st",
+                class_apply: row.class || "1st",
+                school_id: row.school_id,
+                status: row.status || "pending",
+                created_at: row.created_at,
+              });
+            }
+          }
+        }
+      } catch (e) {}
 
-      // Show filtered if available, otherwise show all list for debugging
-      const finalAdmissions = filtered && filtered.length > 0 ? filtered : list;
-      setApplications(finalAdmissions);
+      // 3. Fallback: Query students table where monthly_fee = 0 (STRICTLY filter by school_id!)
+      try {
+        const { data: stuData, error: stuErr } = await supabase
+          .from("students")
+          .select("*")
+          .eq("monthly_fee", 0)
+          .eq("school_id", currentId)
+          .order("created_at", { ascending: false });
+
+        if (!stuErr && stuData && stuData.length > 0) {
+          for (const s of stuData) {
+            const sKey = String(s.id);
+            if (!list.some((r) => String(r.id) === sKey)) {
+              list.push({
+                id: s.id,
+                admission_no: `ADM-${new Date(s.created_at || Date.now()).getFullYear()}-${s.id}`,
+                application_no: `ADM-${new Date(s.created_at || Date.now()).getFullYear()}-${s.id}`,
+                student_name: s.name,
+                father_name: s.father_name || "N/A",
+                phone: s.phone || "",
+                class: s.class || "1st",
+                class_apply: s.class || "1st",
+                school_id: s.school_id,
+                status: "pending",
+                created_at: s.created_at,
+              });
+            }
+          }
+        }
+      } catch (e) {}
+
+      setApplications(list);
     } catch (err: any) {
       console.error("Dashboard admissions load exception:", err);
       showToast("error", err.message || "Failed to load admissions");
@@ -144,9 +202,34 @@ export default function DashboardAdmissionsPage() {
     }
   };
 
+  // Initial load
   useEffect(() => {
     fetchAdmissions();
   }, [school?.id]);
+
+  // 3. Realtime subscription: auto refresh when new admission arrives or status changes
+  useEffect(() => {
+    const channel = supabase
+      .channel("admissions-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "admissions" },
+        () => {
+          fetchAdmissions();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // 10 sec polling as backup for multi-device sync
+  useEffect(() => {
+    const interval = setInterval(fetchAdmissions, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Tab Counts
   const pendingCount = applications.filter((a) => (a.status || "").toLowerCase() === "pending").length;
@@ -177,16 +260,21 @@ export default function DashboardAdmissionsPage() {
     });
   }, [applications, activeTab, searchQuery]);
 
-  // Public Link generation strictly with school_id
-  const getPublicLink = () => {
+  // 4. Public Link generation strictly with Supabase school_id
+  const getPublicLink = (targetId?: string | null) => {
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const currentSchoolId = school?.id || "1";
-    return `${origin}/admission-form?school_id=${currentSchoolId}`;
+    const activeId = targetId || currentSchoolId || school?.id || "";
+    return `${origin}/admission-form?school_id=${activeId}`;
   };
 
   // Copy Admission Link handler
-  const handleCopyLink = () => {
-    const publicLink = getPublicLink();
+  const handleCopyLink = async () => {
+    let activeId = currentSchoolId;
+    if (!activeId) {
+      activeId = await getCurrentSchoolId();
+      if (activeId) setCurrentSchoolId(activeId);
+    }
+    const publicLink = getPublicLink(activeId);
     navigator.clipboard.writeText(publicLink);
     setCopiedLink(true);
     showToast("success", "Link copied! اس لنک کو کسی بھی ڈیوائس پر کھولا جا سکتا ہے");
@@ -194,15 +282,19 @@ export default function DashboardAdmissionsPage() {
   };
 
   // Open Public Form handler
-  const handleOpenPublicForm = () => {
-    const publicLink = getPublicLink();
+  const handleOpenPublicForm = async () => {
+    let activeId = currentSchoolId;
+    if (!activeId) {
+      activeId = await getCurrentSchoolId();
+      if (activeId) setCurrentSchoolId(activeId);
+    }
+    const publicLink = getPublicLink(activeId);
     window.open(publicLink, "_blank");
   };
 
   // Status Update: Approve / Reject
   const handleStatusChange = async (app: AdmissionRecord, newStatus: "approved" | "rejected" | "pending") => {
     try {
-      console.log(`Updating status for ${app.student_name} to ${newStatus}`);
       const targetId = app.id || app.admission_no || app.application_no;
 
       setApplications((prev) =>
@@ -220,22 +312,23 @@ export default function DashboardAdmissionsPage() {
           .update({ status: newStatus })
           .or(`id.eq.${targetId},admission_no.eq.${targetId},application_no.eq.${targetId}`);
       } catch (dbErr) {
-        console.warn("DB update notice:", dbErr);
+        console.error("DB update error:", dbErr);
       }
 
       // If approved, create student row
       if (newStatus === "approved") {
         try {
+          const activeSchoolId = currentSchoolId || (await getCurrentSchoolId()) || school?.id;
           await supabase.from("students").insert([{
             name: app.student_name,
             father_name: app.father_name,
             class: app.class_apply || app.class || "1st",
             phone: app.phone,
             monthly_fee: 1000,
-            school_id: String(app.school_id || school?.id || 1),
+            school_id: String(app.school_id || activeSchoolId || 1),
           }]);
         } catch (stErr) {
-          console.warn("Student auto-creation notice:", stErr);
+          console.error("Student auto-creation error:", stErr);
         }
       }
 
@@ -290,40 +383,54 @@ export default function DashboardAdmissionsPage() {
               <span>{copiedLink ? "لنک کاپی ہو گیا!" : "داخلہ فارم کا لنک کاپی کریں"}</span>
             </button>
 
-            <button
-              onClick={handleOpenPublicForm}
-              className="w-full md:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs sm:text-sm font-semibold bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl shadow-2xs transition-colors cursor-pointer"
-              title="Open Public Admission Form"
-            >
-              <span>پبلک فارم کھولیں</span>
-              <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
-            </button>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                onClick={handleOpenPublicForm}
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs sm:text-sm font-semibold bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl shadow-2xs transition-colors cursor-pointer"
+                title="Open Public Admission Form"
+              >
+                <span>پبلک فارم کھولیں</span>
+                <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+              </button>
 
-            <button
-              onClick={fetchAdmissions}
-              disabled={loading}
-              className="p-2.5 text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-all cursor-pointer shadow-2xs hidden sm:flex items-center justify-center shrink-0"
-              title="Refresh List"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-indigo-600" : ""}`} />
-            </button>
+              <button
+                onClick={fetchAdmissions}
+                disabled={loading}
+                className="p-2.5 text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-all cursor-pointer shadow-2xs flex items-center justify-center shrink-0"
+                title="Refresh List"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-indigo-600" : ""}`} />
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-8 pt-5 space-y-5">
-        {/* REQUIREMENT 5: DEBUG UI IN DASHBOARD HEADER */}
-        <div className="bg-yellow-50 border border-yellow-200 text-yellow-900 rounded-xl p-2.5 text-xs font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 shadow-2xs">
+        {/* Requirement 5: Yellow Debug Bar for multi-device verification */}
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-900 rounded-xl p-3 text-xs font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
           <div>
-            Debug: Current School ID = <strong>{String(school?.id || (typeof window !== "undefined" ? localStorage.getItem("school_id") : "") || "81d51c13-057c-4876-b6be-ee60d21537b9")}</strong> | Total fetched = <strong>{applications.length}</strong> | Check console
+            Debug: Current School ID = <strong>{currentSchoolId || "resolving..."}</strong> | User = <strong>{currentUserEmail || "..."}</strong> | Total fetched = <strong>{applications.length}</strong>
           </div>
-          <button
-            onClick={fetchAdmissions}
-            className="text-[11px] underline font-bold text-yellow-800 hover:text-yellow-950 cursor-pointer self-start sm:self-auto"
-          >
-            ریفریش کریں (Refresh)
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={fetchAdmissions}
+              className="text-[11px] underline font-bold text-yellow-800 hover:text-yellow-950 cursor-pointer"
+            >
+              ریفریش کریں (Refresh)
+            </button>
+            <button
+              onClick={() => {
+                localStorage.clear();
+                sessionStorage.clear();
+                location.reload();
+              }}
+              className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg text-[11px] cursor-pointer transition-colors"
+            >
+              Clear Cache & Reload
+            </button>
+          </div>
         </div>
 
         {/* Toast Alert */}

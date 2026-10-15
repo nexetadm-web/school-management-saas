@@ -239,15 +239,17 @@ export default function AdvancedExpenditurePage() {
   const loadExpenses = async () => {
     try {
       setLoading(true);
-      const sId = school.id || "all";
+      const sId = school.id;
+      if (!sId) {
+        setExpenses([]);
+        setLoading(false);
+        return;
+      }
       let loaded: ExpenseRecord[] = [];
 
-      // 1. Try Supabase
+      // 1. Try Supabase strictly filtered by school_id
       try {
-        let query = supabase.from("expenses").select("*").order("id", { ascending: false });
-        if (sId && sId !== "all") {
-          query = query.eq("school_id", sId);
-        }
+        let query = supabase.from("expenses").select("*").eq("school_id", sId).order("id", { ascending: false });
         const { data, error } = await query;
         if (!error && data && data.length > 0) {
           loaded = data.map((d: any) => ({

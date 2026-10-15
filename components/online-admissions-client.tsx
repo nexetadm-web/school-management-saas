@@ -87,10 +87,11 @@ export default function OnlineAdmissionsClient({
     setTimeout(() => setToast(null), 4000);
   };
 
-  // AUTO POLLING: Har 10 sec me check karega with cache: 'no-store' (Uses auth session school_id)
+  // AUTO POLLING: Har 10 sec me check karega with cache: 'no-store' strictly for activeSchoolId
   useEffect(() => {
+    if (!activeSchoolId || activeSchoolId === "all") return;
     const fetchApps = () =>
-      fetch("/api/applications", { cache: "no-store" })
+      fetch(`/api/applications?school_id=${encodeURIComponent(String(activeSchoolId))}`, { cache: "no-store" })
         .then((r) => r.json())
         .then((data) => {
           if (Array.isArray(data)) {
@@ -102,7 +103,7 @@ export default function OnlineAdmissionsClient({
     fetchApps();
     const interval = setInterval(fetchApps, 10000); // Har 10 sec me check karega
     return () => clearInterval(interval);
-  }, []);
+  }, [activeSchoolId]);
 
   // Realtime subscription via Supabase for immediate sub-second notification
   useEffect(() => {

@@ -92,19 +92,8 @@ export async function POST(req: Request) {
         school_id: String(school_id),
       }]);
 
-      // If foreign key constraint fails because school_id is a demo ID not in schools table
-      if (sErr && sErr.code === '23503') {
-        const { data: firstSchool } = await supabaseAdmin.from("schools").select("id").limit(1).single();
-        if (firstSchool) {
-          await supabaseAdmin.from("students").insert([{
-            name: student_name,
-            father_name: father_name,
-            class: student_class,
-            phone: phone,
-            monthly_fee: 0,
-            school_id: String(firstSchool.id),
-          }]);
-        }
+      if (sErr) {
+        console.warn("Student fallback insert warning:", sErr.message);
       }
     } catch (fallbackErr) {
       console.warn("Fallback student insert notice:", fallbackErr);
@@ -135,18 +124,62 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const school_id = searchParams.get('school_id');
 
+    if (!school_id) {
+      return Response.json(
+        { success: false, error: "school_id parameter is required for tenant isolation" },
+        { status: 400 }
+      );
+    }
+
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dhugnuamyqczvptmvlnq.supabase.co',
       process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRodWdudWFteXFjenZwdG12bG5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA5MDI2NjQsImV4cCI6MjEwNjQ3ODY2NH0.kcbTjmD96_99M3U_PI4wDqJsv1q-D1LapclxRpawcok'
     );
 
-    let query = supabaseAdmin.from('admissions').select('*').order('created_at', { ascending: false });
-    if (school_id) {
-      query = query.eq('school_id', school_id);
+    let list: any[] = [];
+
+    // 1. Query admissions table
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('admissions')
+        .select('*')
+        .eq('school_id', school_id)
+        .order('created_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        list = data;
+      }
+    } catch (e) {}
+
+    // 2. Query students fallback where monthly_fee = 0
+    if (list.length === 0) {
+      try {
+        const { data: stData, error: stErr } = await supabaseAdmin
+          .from('students')
+          .select('*')
+          .eq('monthly_fee', 0)
+          .eq('school_id', school_id)
+          .order('created_at', { ascending: false });
+
+        if (!stErr && stData && stData.length > 0) {
+          list = stData.map((s: any) => ({
+            id: s.id,
+            admission_no: `ADM-${new Date(s.created_at || Date.now()).getFullYear()}-${s.id}`,
+            application_no: `ADM-${new Date(s.created_at || Date.now()).getFullYear()}-${s.id}`,
+            student_name: s.name,
+            father_name: s.father_name || "N/A",
+            phone: s.phone || "",
+            class: s.class || "1st",
+            class_apply: s.class || "1st",
+            school_id: s.school_id,
+            status: "pending",
+            created_at: s.created_at,
+          }));
+        }
+      } catch (e) {}
     }
 
-    const { data, error } = await query;
-    return Response.json({ success: !error, data: data || [] });
+    return Response.json({ success: true, data: list });
   } catch (e: any) {
     return Response.json({ success: false, error: e.message }, { status: 500 });
   }

@@ -90,6 +90,8 @@ function normalizeRecord(row: any): ApplicationRecord {
   };
 }
 
+import { getCurrentSchool } from "./getCurrentSchool";
+
 export async function executeFreshSelect(
   _tableName: string,
   whereClause?: any,
@@ -98,17 +100,26 @@ export async function executeFreshSelect(
   const results: ApplicationRecord[] = [];
   const targetSchoolId = whereClause && whereClause.value !== undefined ? String(whereClause.value) : null;
 
+  // Strict tenant isolation: never return cross-tenant data if school_id is missing
+  if (!targetSchoolId || targetSchoolId === "all" || targetSchoolId === "1") {
+    const authSchool = await getCurrentSchool();
+    if (!authSchool.schoolId) return [];
+  }
+
+  const effectiveSchoolId = (targetSchoolId && targetSchoolId !== "all" && targetSchoolId !== "1")
+    ? targetSchoolId
+    : (await getCurrentSchool()).schoolId;
+
+  if (!effectiveSchoolId) return [];
+
   // 0. Fetch applications directly from admissions table
   try {
-    let q = supabase
+    const { data: admData, error: admErr } = await supabase
       .from("admissions")
       .select("*")
+      .eq("school_id", effectiveSchoolId)
       .order("created_at", { ascending: false });
 
-    if (targetSchoolId && targetSchoolId !== "all") {
-      q = q.eq("school_id", targetSchoolId);
-    }
-    const { data: admData, error: admErr } = await q;
     if (!admErr && admData && admData.length > 0) {
       for (const row of admData) {
         results.push(normalizeRecord(row));
@@ -333,44 +344,12 @@ async function findFirstSchool(whereClause?: any) {
 }
 
 export async function getAuth(_req?: Request) {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data: allSchools } = await supabase.from("schools").select("*");
-      if (allSchools && allSchools.length > 0) {
-        const matched = allSchools.find(
-          (s: any) => s.owner_email && s.owner_email.toLowerCase() === user.email?.toLowerCase()
-        );
-        const schoolId = matched ? matched.id : allSchools[0].id;
-        return {
-          user: {
-            id: user.id,
-            email: user.email,
-            school_id: schoolId,
-          },
-        };
-      }
-    }
-  } catch (e) {}
-
-  try {
-    const { data: allSchools } = await supabase.from("schools").select("*").limit(1);
-    if (allSchools && allSchools[0]) {
-      return {
-        user: {
-          id: "default-user",
-          email: allSchools[0].owner_email || "admin@school.com",
-          school_id: allSchools[0].id,
-        },
-      };
-    }
-  } catch (e) {}
-
+  const current = await getCurrentSchool();
   return {
     user: {
-      id: "default-user",
-      email: "admin@school.com",
-      school_id: "87137fe7-22f2-48dc-820d-f21d21b73686",
+      id: current.userId || "default-user",
+      email: current.userEmail || "admin@school.com",
+      school_id: current.schoolId || "",
     },
   };
 }

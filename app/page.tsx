@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { isSuperAdmin } from "@/lib/constants";
+import { getCurrentSchool, getCurrentSchoolId } from "@/lib/getCurrentSchool";
 import {
   LayoutDashboard,
   GraduationCap,
@@ -249,23 +250,17 @@ export default function Home() {
     }
   };
 
-  // Helper to dynamically resolve school_id from schools table using owner_email
+  // Helper to dynamically resolve school_id from Supabase auth / schools single source of truth
   const resolveSchoolId = async (userEmail?: string | null): Promise<string | number | null> => {
-    if (!userEmail) return schoolId;
     try {
-      const { data: schoolData } = await supabase
-        .from("schools")
-        .select("id, name")
-        .eq("owner_email", userEmail)
-        .maybeSingle();
-
-      if (schoolData && schoolData.id) {
-        setSchoolName(schoolData.name || "Registered School");
-        setSchoolId(schoolData.id);
-        return schoolData.id;
+      const authSchool = await getCurrentSchool();
+      if (authSchool.schoolId) {
+        setSchoolName(authSchool.schoolName);
+        setSchoolId(authSchool.schoolId);
+        return authSchool.schoolId;
       }
     } catch (err) {
-      console.error("Error fetching school by owner_email:", err);
+      console.error("Error resolving school:", err);
     }
     return schoolId;
   };
@@ -292,13 +287,24 @@ export default function Home() {
       let salaryQuery = supabase.from("salary_records").select("*, teachers(name)").order("id", { ascending: false });
       let expensesQuery = supabase.from("expenses").select("*").order("id", { ascending: false });
 
-      // If specific school selected, apply school_id filter; if "all", fetch cross-tenant aggregation
-      if (sId && sId !== "all") {
-        studentsQuery = studentsQuery.eq("school_id", sId);
-        feeQuery = feeQuery.eq("school_id", sId);
-        teachersQuery = teachersQuery.eq("school_id", sId);
-        salaryQuery = salaryQuery.eq("school_id", sId);
-        expensesQuery = expensesQuery.eq("school_id", sId);
+      // Enforce tenant isolation: only verified super admin with explicit "all" can view cross-tenant
+      const allowAll = isSuperAdminUser && sId === "all";
+      if (!allowAll) {
+        const effectiveId = sId === "all" ? (await getCurrentSchoolId()) : sId;
+        if (!effectiveId) {
+          setStudents([]);
+          setFeeRecords([]);
+          setTeachers([]);
+          setSalaryRecords([]);
+          setExpenses([]);
+          setLoading(false);
+          return;
+        }
+        studentsQuery = studentsQuery.eq("school_id", effectiveId);
+        feeQuery = feeQuery.eq("school_id", effectiveId);
+        teachersQuery = teachersQuery.eq("school_id", effectiveId);
+        salaryQuery = salaryQuery.eq("school_id", effectiveId);
+        expensesQuery = expensesQuery.eq("school_id", effectiveId);
       }
 
       const [studentsRes, feeRecordsRes, teachersRes, salaryRecordsRes, expensesRes] = await Promise.all([
@@ -382,22 +388,20 @@ export default function Home() {
       }
 
       // Check localStorage for super admin selected school or impersonation
-      let sId: string | number | null = null;
-      if (isSuper && typeof window !== "undefined") {
-        const stored = localStorage.getItem("oa_superadmin_selected_school_id");
-        if (stored) {
-          sId = stored;
-        }
-      }
+      // 1. Single source of truth for the logged-in user across all devices
+      const authSchool = await getCurrentSchool();
+      let sId: string | number | null = authSchool.schoolId;
 
-      // If not stored in localStorage, resolve user school or default to "all" for super admin
-      if (!sId) {
-        let resolvedId = user.user_metadata?.school_id || user.app_metadata?.school_id;
-        if (user.email) {
-          const lookedUpId = await resolveSchoolId(user.email);
-          if (lookedUpId) resolvedId = lookedUpId;
-        }
-        sId = isSuper ? (resolvedId || "all") : resolvedId;
+      // EMERGENCY CLEAR: Nuke any fake school_id from localStorage
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.removeItem("oa_superadmin_selected_school_id");
+          localStorage.removeItem("oa_superadmin_selected_school_name");
+          localStorage.removeItem("oa_active_school_context_cache");
+          localStorage.removeItem("school_id");
+          localStorage.removeItem("active_school_id");
+          localStorage.removeItem("current_school_id");
+        } catch (e) {}
       }
 
       if (sId) {

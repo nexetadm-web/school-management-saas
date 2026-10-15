@@ -85,9 +85,11 @@ export default function CertificatesPage() {
         .select("id, name, father_name, class_name, roll_number, admission_number, dob, gender")
         .order("name");
 
-      if (schoolId) {
-        q = q.eq("school_id", schoolId);
+      if (!schoolId) {
+        setStudents([]);
+        return;
       }
+      q = q.eq("school_id", schoolId);
 
       const { data, error } = await q.limit(100);
       if (!error && data && data.length > 0) {

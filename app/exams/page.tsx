@@ -110,9 +110,12 @@ export default function ExamsAndReportCardPage() {
 
       // 1. Fetch Students
       let query = supabase.from("students").select("*").order("name", { ascending: true });
-      if (ctx.schoolId && ctx.schoolId !== "all") {
-        query = query.eq("school_id", ctx.schoolId);
+      if (!ctx.schoolId) {
+        setStudents([]);
+        setLoading(false);
+        return;
       }
+      query = query.eq("school_id", ctx.schoolId);
       const { data: studentsData } = await query;
       const studentList: Student[] = studentsData || [];
       setStudents(studentList);
