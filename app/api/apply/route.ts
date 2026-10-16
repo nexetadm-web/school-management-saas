@@ -80,6 +80,7 @@ export async function POST(req: Request) {
           address: body.address || "N/A",
           photo_url: body.photo_url || null,
           status: "pending",
+          created_at: new Date().toISOString(),
         },
       ]);
     } catch (sbErr) {
@@ -101,6 +102,7 @@ export async function POST(req: Request) {
           dob: body.dob || "N/A",
           address: body.address || "N/A",
           status: "pending",
+          created_at: new Date().toISOString(),
         },
       ]);
     } catch (sbErr) {

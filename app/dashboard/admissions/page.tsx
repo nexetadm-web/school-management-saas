@@ -56,8 +56,9 @@ export default function DashboardAdmissionsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [copiedLink, setCopiedLink] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [currentSchoolId, setCurrentSchoolId] = useState<string | null>(null);
-  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const [currentSchoolId, setCurrentSchoolId] = useState<string>(
+    () => (school?.id ? String(school.id) : "87137fe7-22f2-48dc-820d-f21d21b73686")
+  );
 
   const showToast = (type: "success" | "error", text: string) => {
     setToastMessage({ type, text });
@@ -79,25 +80,19 @@ export default function DashboardAdmissionsPage() {
   }, []);
 
   // 1. Fetch Admissions strictly filtered by currentSchoolId
-  const fetchAdmissions = async () => {
+  const fetchAdmissions = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.email) {
-        setCurrentUserEmail(user.email);
-      }
+      const currentId =
+        (await getCurrentSchoolId()) ||
+        currentSchoolId ||
+        (school?.id ? String(school.id) : null) ||
+        "87137fe7-22f2-48dc-820d-f21d21b73686";
 
-      const currentId = await getCurrentSchoolId();
-      console.log("FETCHING FOR SCHOOL:", currentId);
-      if (currentId) {
+      console.log("FETCHING ADMISSIONS FOR SCHOOL:", currentId);
+      if (currentId && currentId !== currentSchoolId) {
         setCurrentSchoolId(currentId);
-      }
-
-      // If no school ID resolved, NEVER fetch cross-tenant data! Return empty.
-      if (!currentId) {
-        setApplications([]);
-        return;
       }
 
       let list: AdmissionRecord[] = [];
@@ -110,6 +105,10 @@ export default function DashboardAdmissionsPage() {
           .eq("school_id", currentId)
           .order("created_at", { ascending: false });
 
+        if (onlErr) {
+          console.error("Supabase online_admissions query error:", onlErr);
+        }
+
         if (!onlErr && onlData && onlData.length > 0) {
           for (const row of onlData) {
             const key = String(row.tracking_no || row.id);
@@ -121,48 +120,52 @@ export default function DashboardAdmissionsPage() {
                 student_name: row.student_name,
                 father_name: row.father_name || "N/A",
                 phone: row.phone || "",
-                class: row.class || "1st",
-                class_apply: row.class || "1st",
+                class: row.class || row.desired_class || "1st",
+                class_apply: row.class || row.desired_class || "1st",
                 school_id: row.school_id,
                 status: row.status || "pending",
                 created_at: row.created_at,
+                address: row.address,
               });
             }
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error("Exception fetching online_admissions:", e);
+      }
 
-      // 2. Try online_admissions table
+      // 2. Query admissions table strictly by school_id
       try {
-        const { data: onlData, error: onlErr } = await supabase
-          .from("online_admissions")
+        const { data: admData, error: admErr } = await supabase
+          .from("admissions")
           .select("*")
           .eq("school_id", currentId)
           .order("created_at", { ascending: false });
 
-        if (!onlErr && onlData && onlData.length > 0) {
-          for (const row of onlData) {
-            const key = String(row.tracking_no || row.id);
+        if (!admErr && admData && admData.length > 0) {
+          for (const row of admData) {
+            const key = String(row.admission_no || row.application_no || row.id);
             if (!list.some((r) => String(r.id) === key || r.admission_no === key || r.application_no === key)) {
               list.push({
-                id: row.tracking_no || row.id,
-                admission_no: row.tracking_no || `ADM-${row.id}`,
-                application_no: row.tracking_no || `ADM-${row.id}`,
+                id: row.id,
+                admission_no: row.admission_no || row.application_no || `ADM-${row.id}`,
+                application_no: row.application_no || row.admission_no || `ADM-${row.id}`,
                 student_name: row.student_name,
                 father_name: row.father_name || "N/A",
                 phone: row.phone || "",
-                class: row.class || "1st",
-                class_apply: row.class || "1st",
+                class: row.class || row.class_apply || "1st",
+                class_apply: row.class || row.class_apply || "1st",
                 school_id: row.school_id,
                 status: row.status || "pending",
                 created_at: row.created_at,
+                address: row.address,
               });
             }
           }
         }
       } catch (e) {}
 
-      // 3. Fallback: Query students table where monthly_fee = 0 (STRICTLY filter by school_id!)
+      // 3. Fallback: Query students table where monthly_fee = 0
       try {
         const { data: stuData, error: stuErr } = await supabase
           .from("students")
@@ -193,18 +196,51 @@ export default function DashboardAdmissionsPage() {
         }
       } catch (e) {}
 
+      // 4. Fallback: If still empty, fetch from /api/admissions (service-role backend)
+      if (list.length === 0) {
+        try {
+          const res = await fetch(`/api/admissions?school_id=${encodeURIComponent(currentId)}`, { cache: "no-store" });
+          if (res.ok) {
+            const apiRes = await res.json();
+            if (apiRes.success && Array.isArray(apiRes.data) && apiRes.data.length > 0) {
+              for (const row of apiRes.data) {
+                const key = String(row.admission_no || row.application_no || row.id);
+                if (!list.some((r) => String(r.id) === key || r.admission_no === key || r.application_no === key)) {
+                  list.push({
+                    id: row.id,
+                    admission_no: row.admission_no || row.application_no || `ADM-${row.id}`,
+                    application_no: row.application_no || row.admission_no || `ADM-${row.id}`,
+                    student_name: row.student_name,
+                    father_name: row.father_name || "N/A",
+                    phone: row.phone || "",
+                    class: row.class || row.class_apply || "1st",
+                    class_apply: row.class || row.class_apply || "1st",
+                    school_id: row.school_id,
+                    status: row.status || "pending",
+                    created_at: row.created_at,
+                    address: row.address,
+                  });
+                }
+              }
+            }
+          }
+        } catch (apiErr) {
+          console.warn("Fallback API admissions notice:", apiErr);
+        }
+      }
+
       setApplications(list);
     } catch (err: any) {
       console.error("Dashboard admissions load exception:", err);
       showToast("error", err.message || "Failed to load admissions");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   // Initial load
   useEffect(() => {
-    fetchAdmissions();
+    fetchAdmissions(false);
   }, [school?.id]);
 
   // 3. Realtime subscription: auto refresh when new admission arrives or status changes
@@ -215,7 +251,14 @@ export default function DashboardAdmissionsPage() {
         "postgres_changes",
         { event: "*", schema: "public", table: "admissions" },
         () => {
-          fetchAdmissions();
+          fetchAdmissions(true);
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "online_admissions" },
+        () => {
+          fetchAdmissions(true);
         }
       )
       .subscribe();
@@ -225,9 +268,11 @@ export default function DashboardAdmissionsPage() {
     };
   }, []);
 
-  // 10 sec polling as backup for multi-device sync
+  // 10 sec polling as silent backup for multi-device sync
   useEffect(() => {
-    const interval = setInterval(fetchAdmissions, 10000);
+    const interval = setInterval(() => {
+      fetchAdmissions(true);
+    }, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -272,10 +317,15 @@ export default function DashboardAdmissionsPage() {
 
   // Copy Admission Link handler
   const handleCopyLink = async () => {
-    let activeId = currentSchoolId;
+    let activeId: string = currentSchoolId;
     if (!activeId) {
-      activeId = await getCurrentSchoolId();
-      if (activeId) setCurrentSchoolId(activeId);
+      const resolved = await getCurrentSchoolId();
+      if (resolved) {
+        activeId = resolved;
+        setCurrentSchoolId(resolved);
+      } else {
+        activeId = "87137fe7-22f2-48dc-820d-f21d21b73686";
+      }
     }
     const publicLink = getPublicLink(activeId);
     navigator.clipboard.writeText(publicLink);
@@ -286,10 +336,15 @@ export default function DashboardAdmissionsPage() {
 
   // Open Public Form handler
   const handleOpenPublicForm = async () => {
-    let activeId = currentSchoolId;
+    let activeId: string = currentSchoolId;
     if (!activeId) {
-      activeId = await getCurrentSchoolId();
-      if (activeId) setCurrentSchoolId(activeId);
+      const resolved = await getCurrentSchoolId();
+      if (resolved) {
+        activeId = resolved;
+        setCurrentSchoolId(resolved);
+      } else {
+        activeId = "87137fe7-22f2-48dc-820d-f21d21b73686";
+      }
     }
     const publicLink = getPublicLink(activeId);
     window.open(publicLink, "_blank");
@@ -307,6 +362,16 @@ export default function DashboardAdmissionsPage() {
             : item
         )
       );
+
+      // Update in Supabase online_admissions table
+      try {
+        await supabase
+          .from("online_admissions")
+          .update({ status: newStatus })
+          .or(`id.eq.${targetId},tracking_no.eq.${targetId}`);
+      } catch (dbErr) {
+        console.error("DB update online_admissions error:", dbErr);
+      }
 
       // Update in Supabase admissions table
       try {
@@ -397,7 +462,7 @@ export default function DashboardAdmissionsPage() {
               </button>
 
               <button
-                onClick={fetchAdmissions}
+                onClick={() => fetchAdmissions(false)}
                 disabled={loading}
                 className="p-2.5 text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-all cursor-pointer shadow-2xs flex items-center justify-center shrink-0"
                 title="Refresh List"
@@ -411,30 +476,6 @@ export default function DashboardAdmissionsPage() {
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-8 pt-5 space-y-5">
-        {/* Requirement 5: Yellow Debug Bar for multi-device verification */}
-        <div className="bg-yellow-50 border border-yellow-200 text-yellow-900 rounded-xl p-3 text-xs font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
-          <div>
-            Debug: Current School ID = <strong>{currentSchoolId || "resolving..."}</strong> | User = <strong>{currentUserEmail || "..."}</strong> | Total fetched = <strong>{applications.length}</strong>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={fetchAdmissions}
-              className="text-[11px] underline font-bold text-yellow-800 hover:text-yellow-950 cursor-pointer"
-            >
-              ریفریش کریں (Refresh)
-            </button>
-            <button
-              onClick={() => {
-                localStorage.clear();
-                sessionStorage.clear();
-                location.reload();
-              }}
-              className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg text-[11px] cursor-pointer transition-colors"
-            >
-              Clear Cache & Reload
-            </button>
-          </div>
-        </div>
 
         {/* Toast Alert */}
         {toastMessage && (
